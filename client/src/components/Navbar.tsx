@@ -25,9 +25,8 @@ export function Navbar() {
 
   return (
     <header
-      className={`fixed top-0 w-full z-50 transition-all duration-300 ${
-        isScrolled ? "glass shadow-sm py-3" : "bg-transparent py-5"
-      }`}
+      className={`fixed top-0 w-full z-50 transition-all duration-300 ${isScrolled ? "glass shadow-sm py-3" : "bg-transparent py-5"
+        }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2 group cursor-pointer">
@@ -47,6 +46,9 @@ export function Navbar() {
           <button onClick={() => scrollToSection("about")} className="hover:text-primary transition-colors">
             About Us
           </button>
+          <Link href="/login">
+            <a className="hover:text-primary transition-colors font-semibold">Client Login</a>
+          </Link>
           <Button onClick={() => scrollToSection("contact")} className="font-semibold shadow-md shadow-primary/20 hover:shadow-lg transition-all rounded-full px-6">
             Get in Touch
           </Button>
@@ -70,6 +72,9 @@ export function Navbar() {
           <button onClick={() => scrollToSection("about")} className="text-left font-medium text-lg p-2">
             About Us
           </button>
+          <Link href="/login">
+            <a className="text-left font-medium text-lg p-2 text-primary">Client Login</a>
+          </Link>
           <Button onClick={() => scrollToSection("contact")} className="w-full mt-2 rounded-xl">
             Get in Touch
           </Button>

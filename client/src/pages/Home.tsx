@@ -9,6 +9,9 @@ import { Footer } from "@/components/Footer";
 import { IconRenderer } from "@/components/IconRenderer";
 import { useServices } from "@/hooks/use-services";
 import { useSubmitContact } from "@/hooks/use-contact";
+import { openWhatsApp } from "@/utils/openWhatsApp";
+import { LeadCaptureDialog } from "@/components/LeadCaptureDialog";
+import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -39,6 +42,7 @@ const staggerContainer = {
 export default function Home() {
   const { data: services, isLoading: isServicesLoading } = useServices();
   const contactMutation = useSubmitContact();
+  const [leadDialogService, setLeadDialogService] = useState<string | null>(null);
 
   const form = useForm({
     resolver: zodResolver(api.contactMessages.create.input),
@@ -73,15 +77,15 @@ export default function Home() {
                   </span>
                   Next-Gen IT Solutions
                 </motion.div>
-                
+
                 <motion.h1 variants={fadeInUp} className="text-5xl sm:text-6xl lg:text-7xl font-display font-extrabold text-secondary leading-[1.1] mb-6 tracking-tight text-balance">
                   Elevate Your Business with <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-accent">Modern Technology</span>
                 </motion.h1>
-                
+
                 <motion.p variants={fadeInUp} className="text-lg sm:text-xl text-muted-foreground mb-8 text-balance leading-relaxed max-w-2xl">
                   From stunning graphics and e-commerce platforms to robust POS systems and secure networking. We deliver end-to-end IT services that drive growth.
                 </motion.p>
-                
+
                 <motion.div variants={fadeInUp} className="flex flex-wrap items-center gap-4">
                   <Button size="lg" className="rounded-full px-8 h-14 text-base shadow-xl shadow-primary/25 hover:shadow-primary/40 transition-all hover:-translate-y-0.5" onClick={() => document.getElementById('services')?.scrollIntoView({ behavior: 'smooth' })}>
                     Explore Services <ArrowRight className="ml-2 w-5 h-5" />
@@ -93,13 +97,13 @@ export default function Home() {
               </motion.div>
             </div>
           </div>
-          
+
           {/* Decorative background elements */}
           {/* landing page hero abstract background texture */}
           <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[800px] h-[800px] opacity-[0.03] pointer-events-none mix-blend-multiply dark:mix-blend-screen dark:opacity-10">
-            <img 
-              src="https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=1600&h=1600&fit=crop" 
-              alt="" 
+            <img
+              src="https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=1600&h=1600&fit=crop"
+              alt=""
               className="w-full h-full object-cover rounded-full blur-3xl"
             />
           </div>
@@ -108,9 +112,9 @@ export default function Home() {
         {/* SERVICES SECTION */}
         <section id="services" className="py-24 bg-white relative z-20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <motion.div 
-              initial="hidden" 
-              whileInView="visible" 
+            <motion.div
+              initial="hidden"
+              whileInView="visible"
               viewport={{ once: true, margin: "-100px" }}
               variants={fadeInUp}
               className="text-center max-w-2xl mx-auto mb-16"
@@ -131,7 +135,7 @@ export default function Home() {
                   </div>
                 ))
               ) : services?.map((service, idx) => (
-                <motion.div 
+                <motion.div
                   key={service.id}
                   initial="hidden"
                   whileInView="visible"
@@ -140,19 +144,24 @@ export default function Home() {
                     hidden: { opacity: 0, y: 20 },
                     visible: { opacity: 1, y: 0, transition: { delay: idx * 0.1, duration: 0.5 } }
                   }}
-                  className="group rounded-3xl p-8 bg-background border border-border/60 shadow-lg shadow-black/[0.02] hover:shadow-xl hover:shadow-primary/5 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden"
+                  className="group flex flex-col h-full rounded-3xl p-8 bg-background border border-border/60 shadow-lg shadow-black/[0.02] hover:shadow-xl hover:shadow-primary/5 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden"
                 >
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-primary/5 to-transparent rounded-bl-full opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                  
-                  <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-6 group-hover:scale-110 group-hover:bg-primary group-hover:text-white transition-all duration-300">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-primary/5 to-transparent rounded-bl-full opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
+
+                  <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-6 group-hover:scale-110 group-hover:bg-primary group-hover:text-white transition-all duration-300 shrink-0 relative z-10">
                     <IconRenderer name={service.icon} className="w-7 h-7" />
                   </div>
-                  
-                  <h4 className="text-xl font-display font-bold text-secondary mb-3">{service.title}</h4>
-                  <p className="text-muted-foreground leading-relaxed mb-6">{service.description}</p>
-                  
-                  <div className="flex items-center text-sm font-semibold text-primary group-hover:text-accent transition-colors">
-                    Learn more <ChevronRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
+
+                  <h4 className="text-xl font-display font-bold text-secondary mb-3 relative z-10">{service.title}</h4>
+                  <p className="text-muted-foreground leading-relaxed mb-6 flex-grow relative z-10">{service.description}</p>
+
+                  <div className="mt-auto pt-4 border-t border-border/40 relative z-10">
+                    <button
+                      onClick={() => setLeadDialogService(service.title)}
+                      className="flex items-center justify-center w-full gap-2 bg-[#25D366] hover:bg-[#128c7e] text-white px-4 py-2.5 rounded-xl transition-all shadow-md shadow-[#25D366]/20 font-semibold text-sm hover:-translate-y-0.5"
+                    >
+                      <MessageSquare className="w-4 h-4" /> Inquire on WhatsApp
+                    </button>
                   </div>
                 </motion.div>
               ))}
@@ -164,7 +173,7 @@ export default function Home() {
         <section id="about" className="py-24 bg-slate-50 border-y border-border/50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, x: -30 }}
                 whileInView={{ opacity: 1, x: 0 }}
                 viewport={{ once: true }}
@@ -177,7 +186,7 @@ export default function Home() {
                 <p className="text-lg text-muted-foreground mb-8 text-balance">
                   We don't just build websites or set up networks; we craft holistic technology ecosystems designed to streamline your operations and maximize your revenue.
                 </p>
-                
+
                 <div className="space-y-4">
                   {[
                     "Tailored solutions for your specific industry",
@@ -192,8 +201,8 @@ export default function Home() {
                   ))}
                 </div>
               </motion.div>
-              
-              <motion.div 
+
+              <motion.div
                 initial={{ opacity: 0, x: 30 }}
                 whileInView={{ opacity: 1, x: 0 }}
                 viewport={{ once: true }}
@@ -202,9 +211,9 @@ export default function Home() {
               >
                 <div className="absolute inset-0 bg-gradient-to-tr from-primary/20 to-accent/20 rounded-3xl transform rotate-3 scale-105"></div>
                 {/* landing page tech workspace team */}
-                <img 
-                  src="https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=1200&h=800&fit=crop" 
-                  alt="Team collaborating on technology solutions" 
+                <img
+                  src="https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=1200&h=800&fit=crop"
+                  alt="Team collaborating on technology solutions"
                   className="relative rounded-3xl shadow-2xl z-10 w-full h-auto object-cover border border-white/20"
                 />
               </motion.div>
@@ -216,7 +225,7 @@ export default function Home() {
         <section id="contact" className="py-24 bg-white relative">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="bg-secondary rounded-[2.5rem] overflow-hidden shadow-2xl relative">
-              
+
               {/* Background Accents */}
               <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/20 rounded-full blur-[100px] pointer-events-none"></div>
               <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-accent/20 rounded-full blur-[100px] pointer-events-none"></div>
@@ -229,7 +238,7 @@ export default function Home() {
                   <p className="text-white/70 text-lg mb-8 max-w-md">
                     Ready to transform your IT infrastructure? Fill out the form, and our experts will get back to you within 24 hours.
                   </p>
-                  
+
                   <div className="mt-auto pt-8 border-t border-white/10">
                     <p className="font-medium text-white/90">Email us directly:</p>
                     <a href="mailto:hello@nexasync.dev" className="text-xl font-bold text-primary hover:text-white transition-colors">
@@ -243,7 +252,7 @@ export default function Home() {
                   <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                       <h4 className="text-2xl font-display font-bold text-secondary mb-6">Send a Message</h4>
-                      
+
                       <FormField
                         control={form.control}
                         name="name"
@@ -257,7 +266,7 @@ export default function Home() {
                           </FormItem>
                         )}
                       />
-                      
+
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <FormField
                           control={form.control}
@@ -272,7 +281,7 @@ export default function Home() {
                             </FormItem>
                           )}
                         />
-                        
+
                         <FormField
                           control={form.control}
                           name="phone"
@@ -295,10 +304,10 @@ export default function Home() {
                           <FormItem>
                             <FormLabel className="text-secondary font-semibold">How can we help?</FormLabel>
                             <FormControl>
-                              <Textarea 
-                                placeholder="Tell us about your project or IT needs..." 
-                                className="resize-none min-h-[120px] bg-slate-50 border-border/60 focus-visible:ring-primary/20" 
-                                {...field} 
+                              <Textarea
+                                placeholder="Tell us about your project or IT needs..."
+                                className="resize-none min-h-[120px] bg-slate-50 border-border/60 focus-visible:ring-primary/20"
+                                {...field}
                               />
                             </FormControl>
                             <FormMessage />
@@ -306,9 +315,9 @@ export default function Home() {
                         )}
                       />
 
-                      <Button 
-                        type="submit" 
-                        size="lg" 
+                      <Button
+                        type="submit"
+                        size="lg"
                         className="w-full h-14 text-lg font-semibold rounded-xl shadow-lg shadow-primary/20 hover:shadow-xl hover:-translate-y-0.5 transition-all"
                         disabled={contactMutation.isPending}
                       >
@@ -323,6 +332,12 @@ export default function Home() {
         </section>
 
       </main>
+
+      <LeadCaptureDialog
+        isOpen={!!leadDialogService}
+        onClose={() => setLeadDialogService(null)}
+        serviceTitle={leadDialogService || undefined}
+      />
 
       <Footer />
     </div>

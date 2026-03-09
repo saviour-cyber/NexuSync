@@ -1,61 +1,743 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
-import { storage } from "./storage";
-import { api } from "@shared/routes";
+import { storage, hashPassword, verifyPassword } from "./storage";
+import { insertContactMessageSchema, insertServiceSchema, insertQuoteSchema, insertProjectSchema, insertTaskSchema, insertMilestoneSchema, insertProjectCommentSchema, insertInvoiceSchema, insertProjectFileSchema, insertUpdateRequestSchema, insertWhatsappLeadSchema, signUpSchema } from "@shared/schema";
 import { z } from "zod";
+import session from "express-session";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
 
-export async function registerRoutes(
-  httpServer: Server,
-  app: Express
-): Promise<Server> {
-  app.get(api.services.list.path, async (req, res) => {
-    const services = await storage.getServices();
-    res.status(200).json(services);
+// Ensure uploads directory exists
+const uploadDir = path.join(process.cwd(), "uploads");
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const upload = multer({ dest: uploadDir });
+
+// ─── Types ─────────────────────────────────────────────────────────────────
+declare module "express-session" {
+  interface SessionData {
+    userId?: number;
+    userRole?: string;
+  }
+}
+
+// ─── Middleware ────────────────────────────────────────────────────────────
+function requireAuth(req: Request, res: Response, next: NextFunction) {
+  if (!req.session?.userId) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+  next();
+}
+
+function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  if (!req.session?.userId || req.session?.userRole !== "admin") {
+    return res.status(403).json({ message: "Forbidden" });
+  }
+  next();
+}
+
+// ─── Routes ────────────────────────────────────────────────────────────────
+export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
+
+  // ── PUBLIC: Services ─────────────────────────────────────────────────────
+  app.get("/api/services", async (_req, res) => {
+    const data = await storage.getServices();
+    res.json(data);
   });
 
-  app.post(api.contactMessages.create.path, async (req, res) => {
+  // ── PUBLIC: Contact Form ──────────────────────────────────────────────────
+  app.post("/api/contact", async (req, res) => {
     try {
-      const input = api.contactMessages.create.input.parse(req.body);
-      const message = await storage.createContactMessage(input);
-      res.status(201).json(message);
+      const input = insertContactMessageSchema.parse(req.body);
+      const msg = await storage.createContactMessage(input);
+      res.status(201).json(msg);
     } catch (err) {
       if (err instanceof z.ZodError) {
-        return res.status(400).json({
-          message: err.errors[0].message,
-          field: err.errors[0].path.join('.'),
-        });
+        return res.status(400).json({ message: err.errors[0].message, field: err.errors[0].path.join(".") });
       }
       throw err;
     }
   });
 
-  // Seed database
+  // ── PUBLIC: Quote Request ─────────────────────────────────────────────────
+  app.post("/api/quotes", async (req, res) => {
+    try {
+      const input = insertQuoteSchema.parse(req.body);
+      const allServices = await storage.getServices();
+      const serviceIds: number[] = JSON.parse(input.serviceIds);
+      const selectedServices = allServices.filter(s => serviceIds.includes(s.id));
+      const estimatedPrice = selectedServices.reduce((sum, s) => sum + (s.basePrice ?? 0), 0);
+      const quote = await storage.createQuote(input);
+      await storage.updateQuote(quote.id, { estimatedPrice });
+      res.status(201).json({ ...quote, estimatedPrice });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      throw err;
+    }
+  });
+
+  // ── AUTH ─────────────────────────────────────────────────────────────────
+  app.post("/api/auth/login", async (req, res) => {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ message: "Email and password are required" });
+    const user = await storage.getUserByEmail(email);
+    if (!user || !verifyPassword(password, user.passwordHash)) {
+      return res.status(401).json({ message: "Invalid email or password" });
+    }
+    req.session.userId = user.id;
+    req.session.userRole = user.role;
+    const { passwordHash, ...pub } = user;
+    res.json(pub);
+  });
+
+  app.post("/api/auth/logout", (req, res) => {
+    req.session.destroy(() => {
+      res.clearCookie("connect.sid");
+      res.json({ ok: true });
+    });
+  });
+
+  app.get("/api/auth/me", requireAuth, async (req, res) => {
+    const user = await storage.getUserById(req.session.userId!);
+    if (!user) return res.status(401).json({ message: "Session invalid" });
+    const { passwordHash, ...pub } = user;
+    res.json(pub);
+  });
+
+  // ── ONBOARDING: Client Registration ───────────────────────────────────────
+  app.post("/api/register", async (req, res) => {
+    try {
+      const data = signUpSchema.parse(req.body);
+
+      // Check if user already exists
+      const existingUser = await storage.getUserByEmail(data.email);
+      if (existingUser) {
+        return res.status(400).json({ message: "Email already registered" });
+      }
+
+      // 1. Create User
+      const user = await storage.createUser({
+        name: data.clientName,
+        email: data.email,
+        passwordHash: hashPassword(data.password),
+        role: "client",
+        company: data.companyName,
+        phone: data.phone
+      });
+
+      // 2. Create Default "Onboarding & Setup" Project
+      const project = await storage.createProject({
+        title: "Onboarding & Setup",
+        description: "Initial workspace for tracking your requirements and quotes.",
+        clientId: user.id,
+        status: "active",
+        progress: 10
+      });
+
+      // 3. Create Automated Quote based on interest
+      if (data.servicesInterested) {
+        await storage.createQuote({
+          name: data.clientName,
+          email: data.email,
+          phone: data.phone,
+          serviceIds: JSON.stringify([]), // Will adjust once services structure is solid
+          projectDetails: `Automated Request: Interested in ${data.servicesInterested}`,
+          budget: "TBD",
+          timeline: "Flexible"
+        });
+      }
+
+      // 4. Create Welcome Message on the Project
+      await storage.createComment({
+        projectId: project.id,
+        userId: 1, // System Admin ID usually 1
+        content: `Welcome to NexaSync, ${data.clientName}! This is your portal where you can track our progress, view files, and communicate directly with us. Let us know how we can help you get started.`
+      });
+
+      // Auto-login the user
+      req.session.userId = user.id;
+      req.session.userRole = "client";
+
+      res.status(201).json(user);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      console.error("Registration error:", err);
+      res.status(500).json({ message: "Internal server error during registration" });
+    }
+  });
+
+  // ── ADMIN: Services ───────────────────────────────────────────────────────
+  app.get("/api/admin/services", requireAdmin, async (_req, res) => {
+    res.json(await storage.getServices());
+  });
+
+  app.post("/api/admin/services", requireAdmin, async (req, res) => {
+    try {
+      const input = insertServiceSchema.parse(req.body);
+      res.status(201).json(await storage.createService(input));
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      throw err;
+    }
+  });
+
+  app.put("/api/admin/services/:id", requireAdmin, async (req, res) => {
+    const id = parseInt(req.params.id);
+    const updated = await storage.updateService(id, req.body);
+    if (!updated) return res.status(404).json({ message: "Service not found" });
+    res.json(updated);
+  });
+
+  app.delete("/api/admin/services/:id", requireAdmin, async (req, res) => {
+    await storage.deleteService(parseInt(req.params.id));
+    res.json({ ok: true });
+  });
+
+  // ── ADMIN: Customers ──────────────────────────────────────────────────────
+  app.get("/api/admin/customers", requireAdmin, async (_req, res) => {
+    res.json(await storage.getClients());
+  });
+
+  app.post("/api/admin/customers", requireAdmin, async (req, res) => {
+    try {
+      const { name, email, password, company, phone } = req.body;
+      if (!name || !email || !password) return res.status(400).json({ message: "name, email, password are required" });
+      const existing = await storage.getUserByEmail(email);
+      if (existing) return res.status(409).json({ message: "Email already exists" });
+      const user = await storage.createUser({ name, email, passwordHash: hashPassword(password), role: "client", company, phone });
+      res.status(201).json(user);
+    } catch (err) { throw err; }
+  });
+
+  // ── ADMIN: Projects ───────────────────────────────────────────────────────
+  app.get("/api/admin/projects", requireAdmin, async (_req, res) => {
+    res.json(await storage.getProjects());
+  });
+
+  app.post("/api/admin/projects", requireAdmin, async (req, res) => {
+    try {
+      const input = insertProjectSchema.parse(req.body);
+      res.status(201).json(await storage.createProject(input));
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      throw err;
+    }
+  });
+
+  app.put("/api/admin/projects/:id", requireAdmin, async (req, res) => {
+    const updated = await storage.updateProject(parseInt(req.params.id), req.body);
+    if (!updated) return res.status(404).json({ message: "Project not found" });
+    res.json(updated);
+  });
+
+  app.delete("/api/admin/projects/:id", requireAdmin, async (req, res) => {
+    await storage.deleteProject(parseInt(req.params.id));
+    res.json({ ok: true });
+  });
+
+  app.post("/api/admin/projects/:id/invoice", requireAdmin, async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const project = await storage.getProjectById(projectId);
+      if (!project) return res.status(404).json({ message: "Project not found" });
+      if (!project.clientId) return res.status(400).json({ message: "Project has no client assigned" });
+
+      const amount = project.budget || 0; // Create invoice with budget amount
+
+      const invoice = await storage.createInvoice({
+        projectId: project.id,
+        clientId: project.clientId,
+        amount,
+        status: "unpaid",
+        dueDate: null
+      });
+
+      res.status(201).json(invoice);
+    } catch (err) {
+      console.error("Invoice generation error:", err);
+      res.status(500).json({ message: "Failed to generate invoice" });
+    }
+  });
+
+  // ── ADMIN: Tasks ─────────────────────────────────────────────────────────
+  app.get("/api/admin/tasks", requireAdmin, async (req, res) => {
+    const projectId = req.query.projectId ? parseInt(req.query.projectId as string) : undefined;
+    res.json(await storage.getTasks(projectId));
+  });
+
+  app.post("/api/admin/tasks", requireAdmin, async (req, res) => {
+    try {
+      const input = insertTaskSchema.parse(req.body);
+      res.status(201).json(await storage.createTask(input));
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      throw err;
+    }
+  });
+
+  app.put("/api/admin/tasks/:id", requireAdmin, async (req, res) => {
+    const updated = await storage.updateTask(parseInt(req.params.id), req.body);
+    if (!updated) return res.status(404).json({ message: "Task not found" });
+    res.json(updated);
+  });
+
+  // ── ADMIN: Milestones ─────────────────────────────────────────────────────
+  app.get("/api/admin/milestones", requireAdmin, async (req, res) => {
+    const projectId = req.query.projectId ? parseInt(req.query.projectId as string) : undefined;
+    res.json(await storage.getMilestones(projectId));
+  });
+
+  app.post("/api/admin/milestones", requireAdmin, async (req, res) => {
+    try {
+      const input = insertMilestoneSchema.parse(req.body);
+      res.status(201).json(await storage.createMilestone(input));
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      throw err;
+    }
+  });
+
+  app.put("/api/admin/milestones/:id", requireAdmin, async (req, res) => {
+    const updated = await storage.updateMilestone(parseInt(req.params.id), req.body);
+    if (!updated) return res.status(404).json({ message: "Milestone not found" });
+    res.json(updated);
+  });
+
+  // ── ADMIN: Quotes ─────────────────────────────────────────────────────────
+  app.get("/api/admin/quotes", requireAdmin, async (_req, res) => {
+    res.json(await storage.getQuotes());
+  });
+
+  app.post("/api/admin/quotes/:id/convert", requireAdmin, async (req, res) => {
+    try {
+      const quoteId = parseInt(req.params.id);
+      const quote = await storage.getQuoteById(quoteId);
+
+      if (!quote) return res.status(404).json({ message: "Quote not found" });
+      if (quote.status === "approved") return res.status(400).json({ message: "Quote already converted" });
+
+      // 1. Find or create the client user
+      let user = await storage.getUserByEmail(quote.email);
+      if (!user) {
+        user = await storage.createUser({
+          name: quote.name,
+          email: quote.email,
+          passwordHash: hashPassword(Math.random().toString(36).slice(-10)), // Generate a random password temp
+          role: "client",
+          phone: quote.phone
+        });
+      }
+
+      // 2. Parse service IDs if any
+      let firstServiceId = null;
+      try {
+        const sIds = JSON.parse(quote.serviceIds);
+        if (Array.isArray(sIds) && sIds.length > 0) {
+          firstServiceId = sIds[0];
+        }
+      } catch (e) { }
+
+      // 3. Create the Project
+      const project = await storage.createProject({
+        title: `Project: ${quote.projectDetails.substring(0, 30)}...`,
+        description: quote.projectDetails,
+        clientId: user.id,
+        serviceId: firstServiceId,
+        status: "active",
+        budget: quote.estimatedPrice,
+        progress: 0
+      });
+
+      // 4. Create an initial welcome comment
+      await storage.createComment({
+        projectId: project.id,
+        userId: req.session.userId!,
+        content: `Project automatically generated from Approved Quote (#${quote.id}).`
+      });
+
+      // 5. Update quote status
+      await storage.updateQuote(quote.id, { status: "approved" });
+
+      res.status(201).json(project);
+    } catch (err) {
+      console.error("Quote conversion error:", err);
+      res.status(500).json({ message: "Failed to convert quote to project" });
+    }
+  });
+
+  app.put("/api/admin/quotes/:id", requireAdmin, async (req, res) => {
+    const updated = await storage.updateQuote(parseInt(req.params.id), req.body);
+    if (!updated) return res.status(404).json({ message: "Quote not found" });
+    res.json(updated);
+  });
+
+  // ── ADMIN: Messages ───────────────────────────────────────────────────────
+  app.get("/api/admin/messages", requireAdmin, async (_req, res) => {
+    res.json(await storage.getContactMessages());
+  });
+
+  app.put("/api/admin/messages/:id/read", requireAdmin, async (req, res) => {
+    await storage.markMessageRead(parseInt(req.params.id));
+    res.json({ ok: true });
+  });
+
+  // ── ADMIN: Analytics ──────────────────────────────────────────────────────
+  app.get("/api/admin/analytics", requireAdmin, async (_req, res) => {
+    res.json(await storage.getAnalytics());
+  });
+
+  // ── ADMIN: WhatsApp Leads ──────────────────────────────────────────────────
+  app.get("/api/admin/leads", requireAdmin, async (_req, res) => {
+    res.json(await storage.getWhatsappLeads());
+  });
+
+  app.post("/api/admin/leads/:id/convert", requireAdmin, async (req, res) => {
+    try {
+      const leadId = parseInt(req.params.id);
+      const lead = await storage.getWhatsappLeadById(leadId);
+
+      if (!lead) return res.status(404).json({ message: "Lead not found" });
+      if (lead.status === "closed" || lead.status === "converted") return res.status(400).json({ message: "Lead already closed or converted" });
+
+      // Create a Quote
+      const quote = await storage.createQuote({
+        name: lead.name,
+        email: "whatsapp-client@example.com", // Placeholder
+        phone: lead.phone,
+        serviceIds: JSON.stringify([]),
+        projectDetails: `Inbound WhatsApp Lead: ${lead.service || 'General Inquiry'}\nMessage: ${lead.message || 'None'}`,
+        budget: "TBD",
+        timeline: "TBD"
+      });
+
+      // Update lead status
+      await storage.updateWhatsappLeadStatus(lead.id, "converted");
+
+      res.status(201).json(quote);
+    } catch (err) {
+      console.error("Lead conversion error:", err);
+      res.status(500).json({ message: "Failed to convert lead to quote" });
+    }
+  });
+
+  app.patch("/api/admin/leads/:id", requireAdmin, async (req, res) => {
+    const { status } = req.body;
+    if (!status) return res.status(400).json({ message: "Status is required" });
+    const updated = await storage.updateWhatsappLeadStatus(parseInt(req.params.id), status);
+    if (!updated) return res.status(404).json({ message: "Lead not found" });
+    res.json(updated);
+  });
+
+  // ── PUBLIC: WhatsApp Leads ────────────────────────────────────────────────
+  app.post("/api/leads", async (req, res) => {
+    try {
+      const input = insertWhatsappLeadSchema.parse(req.body);
+      const lead = await storage.createWhatsappLead(input);
+      res.status(201).json(lead);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      throw err;
+    }
+  });
+
+  // ── ADMIN: Invoices ───────────────────────────────────────────────────────
+  app.get("/api/admin/invoices", requireAdmin, async (_req, res) => {
+    res.json(await storage.getInvoices());
+  });
+
+  app.post("/api/admin/invoices", requireAdmin, async (req, res) => {
+    try {
+      const input = insertInvoiceSchema.parse(req.body);
+      res.status(201).json(await storage.createInvoice(input));
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      throw err;
+    }
+  });
+
+  app.put("/api/admin/invoices/:id", requireAdmin, async (req, res) => {
+    const updated = await storage.updateInvoice(parseInt(req.params.id), req.body);
+    if (!updated) return res.status(404).json({ message: "Invoice not found" });
+    res.json(updated);
+  });
+
+  // ── ADMIN: Comments ───────────────────────────────────────────────────────
+  app.get("/api/admin/comments", requireAdmin, async (req, res) => {
+    const projectId = req.query.projectId ? parseInt(req.query.projectId as string) : undefined;
+    res.json(await storage.getComments(projectId));
+  });
+
+  app.post("/api/admin/comments", requireAdmin, async (req, res) => {
+    try {
+      const input = insertProjectCommentSchema.parse(req.body);
+      res.status(201).json(await storage.createComment(input));
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      throw err;
+    }
+  });
+
+  // ── ADMIN: Update Requests ────────────────────────────────────────────────
+  app.get("/api/admin/update-requests", requireAdmin, async (req, res) => {
+    const projectId = req.query.projectId ? parseInt(req.query.projectId as string) : undefined;
+    res.json(await storage.getUpdateRequests(projectId));
+  });
+
+  app.post("/api/admin/update-requests/:id/reply", requireAdmin, async (req, res) => {
+    try {
+      const { reply } = req.body;
+      const updated = await storage.replyToUpdateRequest(parseInt(req.params.id), reply);
+      if (!updated) return res.status(404).json({ message: "Update request not found" });
+      res.json(updated);
+    } catch (err) {
+      res.status(400).json({ message: "Invalid request" });
+    }
+  });
+
+  // ── ADMIN: Files ──────────────────────────────────────────────────────────
+  app.get("/api/admin/files", requireAdmin, async (req, res) => {
+    const projectId = req.query.projectId ? parseInt(req.query.projectId as string) : undefined;
+    if (!projectId) return res.status(400).json({ message: "projectId is required" });
+    res.json(await storage.getFilesByProject(projectId));
+  });
+
+  app.post("/api/admin/files", requireAdmin, upload.single("file"), async (req, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+      const projectId = parseInt(req.body.projectId);
+      const fileRecord = await storage.createFile({
+        projectId,
+        uploadedBy: req.session.userId!,
+        fileName: req.file.filename,
+        originalName: req.file.originalname,
+        mimeType: req.file.mimetype,
+        size: req.file.size,
+      });
+      res.status(201).json(fileRecord);
+    } catch (err) {
+      res.status(400).json({ message: "Upload failed" });
+    }
+  });
+
+  app.delete("/api/admin/files/:id", requireAdmin, async (req, res) => {
+    const fileId = parseInt(req.params.id);
+    const fileRecord = await storage.getFileById(fileId);
+    if (!fileRecord) return res.status(404).json({ message: "File not found" });
+
+    // Delete physical file
+    const filePath = path.join(uploadDir, fileRecord.fileName);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+
+    await storage.deleteFile(fileId);
+    res.status(204).end();
+  });
+
+  // ── PORTAL: Client Routes ──────────────────────────────────────────────────
+  app.get("/api/portal/projects", requireAuth, async (req, res) => {
+    const clientId = req.session.userId!;
+    res.json(await storage.getProjectsByClientId(clientId));
+  });
+
+  // ── PORTAL: Quotes ────────────────────────────────────────────────────────
+  app.get("/api/portal/quotes", requireAuth, async (req, res) => {
+    // Return quotes that match the logged-in client's email
+    const user = await storage.getUserById(req.session.userId!);
+    if (!user) return res.status(401).json({ message: "Unauthorized" });
+    const allQuotes = await storage.getQuotes();
+    const myQuotes = allQuotes.filter(q => q.email === user.email);
+    res.json(myQuotes);
+  });
+
+  app.post("/api/portal/quotes/:id/approve", requireAuth, async (req, res) => {
+    try {
+      const quoteId = parseInt(req.params.id);
+      const quote = await storage.getQuoteById(quoteId);
+      if (!quote) return res.status(404).json({ message: "Quote not found" });
+
+      // Verify ownership by email
+      const user = await storage.getUserById(req.session.userId!);
+      if (!user || quote.email !== user.email) return res.status(403).json({ message: "Forbidden" });
+      if (quote.status === "approved") return res.status(400).json({ message: "Quote already approved" });
+
+      // Mark quote approved
+      await storage.updateQuote(quoteId, { status: "approved" });
+
+      // Auto-create project for this client
+      const project = await storage.createProject({
+        title: `Project: ${quote.projectDetails.slice(0, 50)}`,
+        description: quote.projectDetails,
+        status: "active",
+        clientId: user.id,
+        budget: quote.estimatedPrice ?? 0,
+        progress: 0,
+      });
+
+      // Welcome comment
+      await storage.createComment({
+        projectId: project.id,
+        userId: 1, // System Admin (id=1)
+        content: `🎉 Your quote has been approved and this project has been created! We will be in touch shortly to discuss next steps.`,
+      });
+
+      res.status(201).json({ quote, project });
+    } catch (err) {
+      console.error("Quote approval error:", err);
+      res.status(500).json({ message: "Failed to approve quote" });
+    }
+  });
+
+  app.post("/api/portal/quotes/:id/reject", requireAuth, async (req, res) => {
+    try {
+      const quoteId = parseInt(req.params.id);
+      const quote = await storage.getQuoteById(quoteId);
+      if (!quote) return res.status(404).json({ message: "Quote not found" });
+
+      const user = await storage.getUserById(req.session.userId!);
+      if (!user || quote.email !== user.email) return res.status(403).json({ message: "Forbidden" });
+
+      await storage.updateQuote(quoteId, { status: "rejected" });
+      res.json({ message: "Quote rejected" });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to reject quote" });
+    }
+  });
+
+  app.get("/api/portal/invoices", requireAuth, async (req, res) => {
+    const clientId = req.session.userId!;
+    res.json(await storage.getInvoices(clientId));
+  });
+
+  app.get("/api/portal/comments", requireAuth, async (req, res) => {
+    const projectId = req.query.projectId ? parseInt(req.query.projectId as string) : undefined;
+    res.json(await storage.getComments(projectId));
+  });
+
+  app.post("/api/portal/comments", requireAuth, async (req, res) => {
+    try {
+      const input = insertProjectCommentSchema.parse({ ...req.body, userId: req.session.userId });
+      res.status(201).json(await storage.createComment(input));
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      throw err;
+    }
+  });
+
+  // ── PORTAL: Milestones ────────────────────────────────────────────────────
+  app.get("/api/portal/milestones", requireAuth, async (req, res) => {
+    const projectId = req.query.projectId ? parseInt(req.query.projectId as string) : undefined;
+    if (!projectId) return res.status(400).json({ message: "projectId is required" });
+
+    // Auth check
+    const projects = await storage.getProjectsByClientId(req.session.userId!);
+    if (!projects.some(p => p.id === projectId)) return res.status(403).json({ message: "Forbidden" });
+
+    res.json(await storage.getMilestones(projectId));
+  });
+
+  // ── PORTAL: Update Requests ───────────────────────────────────────────────
+  app.get("/api/portal/update-requests", requireAuth, async (req, res) => {
+    const projectId = req.query.projectId ? parseInt(req.query.projectId as string) : undefined;
+    res.json(await storage.getUpdateRequests(projectId, req.session.userId));
+  });
+
+  app.post("/api/portal/update-requests", requireAuth, async (req, res) => {
+    try {
+      const input = insertUpdateRequestSchema.parse({ ...req.body, userId: req.session.userId });
+      res.status(201).json(await storage.createUpdateRequest(input));
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      throw err;
+    }
+  });
+
+  // ── PORTAL: Files ─────────────────────────────────────────────────────────
+  app.get("/api/portal/files", requireAuth, async (req, res) => {
+    const projectId = req.query.projectId ? parseInt(req.query.projectId as string) : undefined;
+    if (!projectId) return res.status(400).json({ message: "projectId is required" });
+    // Verify client owns the project
+    const projects = await storage.getProjectsByClientId(req.session.userId!);
+    if (!projects.some(p => p.id === projectId)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    res.json(await storage.getFilesByProject(projectId));
+  });
+
+  app.post("/api/portal/files", requireAuth, upload.single("file"), async (req, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+      const projectId = parseInt(req.body.projectId);
+
+      // Verify client owns the project
+      const projects = await storage.getProjectsByClientId(req.session.userId!);
+      if (!projects.some(p => p.id === projectId)) {
+        // Cleanup uploaded file since forbidden
+        fs.unlinkSync(req.file.path);
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
+      const fileRecord = await storage.createFile({
+        projectId,
+        uploadedBy: req.session.userId!,
+        fileName: req.file.filename,
+        originalName: req.file.originalname,
+        mimeType: req.file.mimetype,
+        size: req.file.size,
+      });
+      res.status(201).json(fileRecord);
+    } catch (err) {
+      // Cleanup on error
+      if (req.file) fs.unlinkSync(req.file.path);
+      res.status(400).json({ message: "Upload failed" });
+    }
+  });
+
+  // Download Route (used by both Admin & Portal)
+  app.get("/api/files/:id/download", requireAuth, async (req, res) => {
+    const fileRecord = await storage.getFileById(parseInt(req.params.id));
+    if (!fileRecord) return res.status(404).json({ message: "File not found" });
+
+    // Restrict to owner or admin
+    if (req.user?.role !== "admin") {
+      const projects = await storage.getProjectsByClientId(req.session.userId!);
+      if (!projects.some(p => p.id === fileRecord.projectId)) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+    }
+
+    const filePath = path.join(uploadDir, fileRecord.fileName);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ message: "File missing from disk" });
+
+    res.download(filePath, fileRecord.originalName);
+  });
+
+  // ── Seed Default Data ─────────────────────────────────────────────────────
   const existingServices = await storage.getServices();
   if (existingServices.length === 0) {
-    await storage.createService({
-      title: "Graphic Design",
-      description: "Creative and professional graphic designs tailored to your brand identity.",
-      icon: "Palette"
-    });
-    await storage.createService({
-      title: "Web Design",
-      description: "Modern, responsive, and user-friendly websites built for performance.",
-      icon: "Monitor"
-    });
-    await storage.createService({
-      title: "E-Commerce Solutions",
-      description: "Robust online stores designed to maximize conversions and sales.",
-      icon: "ShoppingCart"
-    });
-    await storage.createService({
-      title: "POS Designs",
-      description: "Efficient Point of Sale systems to streamline your daily operations.",
-      icon: "CreditCard"
-    });
-    await storage.createService({
-      title: "Networking Services",
-      description: "Reliable and secure networking solutions to keep your business connected.",
-      icon: "Network"
+    const defaultServices = [
+      { title: "Graphic Design", description: "Creative and professional graphic designs tailored to your brand identity.", icon: "Palette", basePrice: 500 },
+      { title: "Web Design", description: "Modern, responsive, and user-friendly websites built for performance.", icon: "Monitor", basePrice: 1500 },
+      { title: "E-Commerce Solutions", description: "Robust online stores designed to maximize conversions and sales.", icon: "ShoppingCart", basePrice: 3000 },
+      { title: "POS Designs", description: "Efficient Point of Sale systems to streamline your daily operations.", icon: "CreditCard", basePrice: 2000 },
+      { title: "Networking Services", description: "Reliable and secure networking solutions to keep your business connected.", icon: "Network", basePrice: 1000 },
+    ];
+    for (const s of defaultServices) await storage.createService(s);
+  }
+
+  // Seed default admin account
+  const existingAdmin = await storage.getUserByEmail("admin@wchch.dev");
+  if (!existingAdmin) {
+    await storage.createUser({
+      name: "Admin",
+      email: "admin@wchch.dev",
+      passwordHash: hashPassword("wchch"),
+      role: "admin",
     });
   }
 
