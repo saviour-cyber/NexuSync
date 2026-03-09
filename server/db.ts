@@ -4,9 +4,7 @@ import { drizzle as drizzlePg } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import * as schema from "@shared/schema";
 import path from "path";
-import { fileURLToPath } from "url";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export const isPostgres = !!process.env.DATABASE_URL;
 
@@ -20,7 +18,7 @@ if (isPostgres) {
   });
   db = drizzlePg(pool, { schema });
 } else {
-  const dbPath = path.resolve(__dirname, "..", "nexasync.db");
+  const dbPath = path.resolve(process.cwd(), "nexasync.db");
   sqlite = new Database(dbPath);
   sqlite.pragma("journal_mode = WAL");
   db = drizzleSqlite(sqlite, { schema });
