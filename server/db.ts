@@ -153,5 +153,4 @@ if (sqlite) {
   `);
 }
 
-
-export { sqlite };
+// Removed duplicate export of sqlite (it is already exported on line 29)
