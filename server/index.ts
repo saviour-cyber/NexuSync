@@ -8,6 +8,15 @@ import MemoryStore from "memorystore";
 const app = express();
 const httpServer = createServer(app);
 
+// Global Error Handlers for Production Debugging
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("❌ [process] Unhandled Rejection at:", promise, "reason:", reason);
+});
+process.on("uncaughtException", (err) => {
+  console.error("❌ [process] Uncaught Exception:", err);
+  process.exit(1);
+});
+
 declare module "http" {
   interface IncomingMessage {
     rawBody: unknown;
