@@ -6,9 +6,18 @@ export const isPostgres = false; // Legacy flag, removing or turning false
 export const isMysql = true;
 
 // Create a MySQL connection pool using the DATABASE_URL environment variable.
-// Fallback to a local dev string if not provided.
+if (!process.env.DATABASE_URL && process.env.NODE_ENV === "production") {
+  throw new Error("❌ DATABASE_URL is missing in production environment variables!");
+}
+
+const dbUri = process.env.DATABASE_URL || "mysql://user:password@localhost:3306/nexasync";
+
+// Log the host being used (masking credentials)
+const maskedUri = dbUri.replace(/\/\/.*:.*@/, "//***:***@");
+console.log(`[db] Connecting to database at ${maskedUri}`);
+
 const poolConnection = mysql.createPool({
-  uri: process.env.DATABASE_URL || "mysql://user:password@localhost:3306/nexasync",
+  uri: dbUri,
 });
 
 export const db = drizzle(poolConnection, { schema, mode: "default" });
