@@ -21,7 +21,14 @@ try {
   const port = parseInt(url.port || "3306", 10);
   const user = url.username;
   const password = url.password;
-  const database = url.pathname.replace("/", "") || "nexasync";
+  let database = url.pathname.replace("/", "") || "nexasync";
+
+  // SAFETY: TiDB Cloud often defaults to 'sys' or 'test' if the path is wrong.
+  // We force 'nexasync' here because that's where our tables were created.
+  if (host.includes("tidbcloud.com") && (database === "sys" || database === "test" || !database)) {
+    console.log(`[db] Redirecting database from '${database}' to 'nexasync'`);
+    database = "nexasync";
+  }
 
   console.log(`[db] Target: ${host}:${port}, User: ${user}, Database: ${database}`);
 
