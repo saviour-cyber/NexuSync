@@ -14,9 +14,14 @@ import {
   type ProjectFile, type InsertProjectFile,
   type UpdateRequest, type InsertUpdateRequest,
   type WhatsappLead, type InsertWhatsappLead,
+  type Conversation, type InsertConversation,
+  type Message, type InsertMessage,
+  type Attachment, type InsertAttachment,
   type CreateServiceRequest, type CreateContactMessageRequest,
   type ServiceResponse, type ContactMessageResponse,
+  paymentLogs, type PaymentLog, type InsertPaymentLog
 } from "@shared/schema";
+import { conversations, messages, attachments } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import crypto from "node:crypto";
 
@@ -77,10 +82,14 @@ export interface IStorage {
   getComments(projectId?: number): Promise<ProjectComment[]>;
   createComment(comment: InsertProjectComment): Promise<ProjectComment>;
 
-  // Invoices
+  // Invoices & Payments
   getInvoices(clientId?: number): Promise<Invoice[]>;
+  getInvoiceById(id: number): Promise<Invoice | undefined>;
   createInvoice(invoice: InsertInvoice): Promise<Invoice>;
   updateInvoice(id: number, data: Partial<Invoice>): Promise<Invoice | undefined>;
+
+  getPaymentLogsByInvoice(invoiceId: number): Promise<PaymentLog[]>;
+  createPaymentLog(log: InsertPaymentLog): Promise<PaymentLog>;
 
   // Project Files
   getFilesByProject(projectId: number): Promise<ProjectFile[]>;
@@ -99,6 +108,14 @@ export interface IStorage {
   createWhatsappLead(lead: InsertWhatsappLead): Promise<WhatsappLead>;
   updateWhatsappLeadStatus(id: number, status: string): Promise<WhatsappLead | undefined>;
 
+  // Messaging (Refactored)
+  getConversationByProjectId(projectId: number): Promise<Conversation>;
+  createMessage(message: InsertMessage): Promise<Message>;
+  getMessagesByConversationId(conversationId: number): Promise<(Message & { attachments: Attachment[] })[]>;
+  createAttachment(attachment: InsertAttachment): Promise<Attachment>;
+  updateConversationStatus(id: number, data: { adminLastReadAt?: Date; clientLastReadAt?: Date }): Promise<void>;
+  migrateCommentsToMessages(): Promise<void>;
+
   // Analytics
   getAnalytics(): Promise<any>;
 }
@@ -114,6 +131,7 @@ export class MemStorage implements IStorage {
   private _messages: ContactMessage[] = [];
   private _comments: ProjectComment[] = [];
   private _invoices: Invoice[] = [];
+  private _paymentLogs: PaymentLog[] = [];
   private _id = 1;
   private nextId() { return this._id++; }
 
@@ -143,6 +161,7 @@ export class MemStorage implements IStorage {
   async createUser(u: InsertUser): Promise<PublicUser> {
     const user: User = {
       ...u, id: this.nextId(),
+      role: u.role ?? "client",
       company: u.company ?? null,
       phone: u.phone ?? null,
       createdAt: new Date(),
@@ -159,6 +178,7 @@ export class MemStorage implements IStorage {
   async createProject(p: InsertProject): Promise<Project> {
     const item: Project = {
       ...p, id: this.nextId(), createdAt: new Date(), updatedAt: new Date(),
+      status: p.status ?? "active",
       description: p.description ?? null,
       clientId: p.clientId ?? null,
       serviceId: p.serviceId ?? null,
@@ -186,6 +206,8 @@ export class MemStorage implements IStorage {
   async createTask(t: InsertTask): Promise<Task> {
     const item: Task = {
       ...t, id: this.nextId(), createdAt: new Date(),
+      status: t.status ?? "todo",
+      priority: t.priority ?? "medium",
       description: t.description ?? null,
       projectId: t.projectId ?? null,
       assignedTo: t.assignedTo ?? null,
@@ -271,13 +293,19 @@ export class MemStorage implements IStorage {
     return item;
   }
 
-  // ── Invoices
+  // ── Invoices & Payments
   async getInvoices(clientId?: number) {
     return clientId ? this._invoices.filter(i => i.clientId === clientId) : this._invoices;
+  }
+  async getInvoiceById(id: number) {
+    return this._invoices.find(i => i.id === id);
   }
   async createInvoice(inv: InsertInvoice): Promise<Invoice> {
     const item: Invoice = {
       ...inv, id: this.nextId(), createdAt: new Date(), paidAt: null,
+      status: inv.status ?? "unpaid",
+      paymentMethod: inv.paymentMethod ?? null,
+      paymentReference: inv.paymentReference ?? null,
       projectId: inv.projectId ?? null,
       clientId: inv.clientId ?? null,
       dueDate: inv.dueDate ? new Date(inv.dueDate as any) : null,
@@ -290,6 +318,18 @@ export class MemStorage implements IStorage {
     if (i === -1) return undefined;
     this._invoices[i] = { ...this._invoices[i], ...data };
     return this._invoices[i];
+  }
+  
+  async getPaymentLogsByInvoice(invoiceId: number) {
+    return this._paymentLogs.filter(p => p.invoiceId === invoiceId);
+  }
+  async createPaymentLog(log: InsertPaymentLog): Promise<PaymentLog> {
+    const item: PaymentLog = {
+      ...log, id: this.nextId(), createdAt: new Date(),
+      transactionId: log.transactionId ?? null,
+    };
+    this._paymentLogs.push(item);
+    return item;
   }
 
   // ── Files
@@ -353,6 +393,56 @@ export class MemStorage implements IStorage {
       monthlyData: [],
     };
   }
+
+  // ── Messaging Implementation in MemStorage
+  private _conversations: Conversation[] = [];
+  private _chatMessages: Message[] = [];
+  private _attachments: Attachment[] = [];
+
+  async getConversationByProjectId(projectId: number): Promise<Conversation> {
+    let conv = this._conversations.find(c => c.projectId === projectId);
+    if (!conv) {
+      conv = { id: this.nextId(), projectId, createdAt: new Date(), adminLastReadAt: null, clientLastReadAt: null };
+      this._conversations.push(conv);
+    }
+    return conv;
+  }
+
+  async createMessage(m: InsertMessage): Promise<Message> {
+    const item: Message = { 
+      ...m, 
+      id: this.nextId(), 
+      createdAt: new Date(),
+      content: m.content ?? null
+    };
+    this._chatMessages.push(item);
+    return item;
+  }
+
+  async getMessagesByConversationId(conversationId: number): Promise<(Message & { attachments: Attachment[] })[]> {
+    const msgs = this._chatMessages.filter(m => m.conversationId === conversationId);
+    return msgs.map(m => ({
+      ...m,
+      attachments: this._attachments.filter(a => a.messageId === m.id)
+    }));
+  }
+
+  async createAttachment(a: InsertAttachment): Promise<Attachment> {
+    const item: Attachment = { ...a, id: this.nextId(), uploadedAt: new Date() };
+    this._attachments.push(item);
+    return item;
+  }
+
+  async updateConversationStatus(id: number, data: { adminLastReadAt?: Date; clientLastReadAt?: Date }): Promise<void> {
+    const i = this._conversations.findIndex(c => c.id === id);
+    if (i !== -1) {
+      this._conversations[i] = { ...this._conversations[i], ...data };
+    }
+  }
+
+  async migrateCommentsToMessages(): Promise<void> {
+    // Migration logic for MemStorage if needed
+  }
 }
 
 // ─── DatabaseStorage ──────────────────────────────────────────────────────────
@@ -360,11 +450,13 @@ export class DatabaseStorage implements IStorage {
 
   async getServices() { return await db.select().from(services); }
   async createService(s: InsertService) {
-    const [res] = await db.insert(services).values(s).returning();
+    const [info] = await db.insert(services).values(s);
+    const [res] = await db.select().from(services).where(eq(services.id, info.insertId));
     return res;
   }
   async updateService(id: number, s: Partial<InsertService>) {
-    const [res] = await db.update(services).set(s).where(eq(services.id, id)).returning();
+    await db.update(services).set(s).where(eq(services.id, id));
+    const [res] = await db.select().from(services).where(eq(services.id, id));
     return res;
   }
   async deleteService(id: number) {
@@ -384,7 +476,8 @@ export class DatabaseStorage implements IStorage {
     return all.map(({ passwordHash, ...rest }) => rest);
   }
   async createUser(u: InsertUser): Promise<PublicUser> {
-    const [r] = await db.insert(users).values(u).returning();
+    const [info] = await db.insert(users).values(u);
+    const [r] = await db.select().from(users).where(eq(users.id, info.insertId));
     const { passwordHash, ...pub } = r;
     return pub;
   }
@@ -398,11 +491,13 @@ export class DatabaseStorage implements IStorage {
     return res;
   }
   async createProject(p: InsertProject) {
-    const [res] = await db.insert(projects).values(p).returning();
+    const [info] = await db.insert(projects).values(p);
+    const [res] = await db.select().from(projects).where(eq(projects.id, info.insertId));
     return res;
   }
   async updateProject(id: number, p: Partial<InsertProject>) {
-    const [res] = await db.update(projects).set({ ...p, updatedAt: new Date() }).where(eq(projects.id, id)).returning();
+    await db.update(projects).set({ ...p, updatedAt: new Date() }).where(eq(projects.id, id));
+    const [res] = await db.select().from(projects).where(eq(projects.id, id));
     return res;
   }
   async deleteProject(id: number) {
@@ -415,11 +510,13 @@ export class DatabaseStorage implements IStorage {
       : await db.select().from(tasks);
   }
   async createTask(t: InsertTask) {
-    const [res] = await db.insert(tasks).values(t).returning();
+    const [info] = await db.insert(tasks).values(t);
+    const [res] = await db.select().from(tasks).where(eq(tasks.id, info.insertId));
     return res;
   }
   async updateTask(id: number, t: Partial<InsertTask>) {
-    const [res] = await db.update(tasks).set(t).where(eq(tasks.id, id)).returning();
+    await db.update(tasks).set(t).where(eq(tasks.id, id));
+    const [res] = await db.select().from(tasks).where(eq(tasks.id, id));
     return res;
   }
 
@@ -429,11 +526,13 @@ export class DatabaseStorage implements IStorage {
       : await db.select().from(milestones);
   }
   async createMilestone(m: InsertMilestone) {
-    const [res] = await db.insert(milestones).values(m).returning();
+    const [info] = await db.insert(milestones).values(m);
+    const [res] = await db.select().from(milestones).where(eq(milestones.id, info.insertId));
     return res;
   }
   async updateMilestone(id: number, m: Partial<InsertMilestone>) {
-    const [res] = await db.update(milestones).set(m).where(eq(milestones.id, id)).returning();
+    await db.update(milestones).set(m).where(eq(milestones.id, id));
+    const [res] = await db.select().from(milestones).where(eq(milestones.id, id));
     return res;
   }
 
@@ -443,17 +542,20 @@ export class DatabaseStorage implements IStorage {
     return res;
   }
   async createQuote(q: InsertQuote) {
-    const [res] = await db.insert(quotes).values(q).returning();
+    const [info] = await db.insert(quotes).values(q);
+    const [res] = await db.select().from(quotes).where(eq(quotes.id, info.insertId));
     return res;
   }
   async updateQuote(id: number, data: Partial<Quote>) {
-    const [res] = await db.update(quotes).set(data as any).where(eq(quotes.id, id)).returning();
+    await db.update(quotes).set(data as any).where(eq(quotes.id, id));
+    const [res] = await db.select().from(quotes).where(eq(quotes.id, id));
     return res;
   }
 
   async getContactMessages() { return await db.select().from(contactMessages); }
   async createContactMessage(m: InsertContactMessage) {
-    const [res] = await db.insert(contactMessages).values(m).returning();
+    const [info] = await db.insert(contactMessages).values(m);
+    const [res] = await db.select().from(contactMessages).where(eq(contactMessages.id, info.insertId));
     return res;
   }
   async markMessageRead(id: number) {
@@ -466,7 +568,8 @@ export class DatabaseStorage implements IStorage {
       : await db.select().from(projectComments);
   }
   async createComment(c: InsertProjectComment) {
-    const [res] = await db.insert(projectComments).values(c).returning();
+    const [info] = await db.insert(projectComments).values(c);
+    const [res] = await db.select().from(projectComments).where(eq(projectComments.id, info.insertId));
     return res;
   }
 
@@ -475,12 +578,27 @@ export class DatabaseStorage implements IStorage {
       ? await db.select().from(invoices).where(eq(invoices.clientId, clientId))
       : await db.select().from(invoices);
   }
+  async getInvoiceById(id: number) {
+    const [res] = await db.select().from(invoices).where(eq(invoices.id, id));
+    return res;
+  }
   async createInvoice(inv: InsertInvoice) {
-    const [res] = await db.insert(invoices).values(inv).returning();
+    const [info] = await db.insert(invoices).values(inv);
+    const [res] = await db.select().from(invoices).where(eq(invoices.id, info.insertId));
     return res;
   }
   async updateInvoice(id: number, data: Partial<Invoice>) {
-    const [res] = await db.update(invoices).set(data as any).where(eq(invoices.id, id)).returning();
+    await db.update(invoices).set(data as any).where(eq(invoices.id, id));
+    const [res] = await db.select().from(invoices).where(eq(invoices.id, id));
+    return res;
+  }
+
+  async getPaymentLogsByInvoice(invoiceId: number) {
+    return await db.select().from(paymentLogs).where(eq(paymentLogs.invoiceId, invoiceId));
+  }
+  async createPaymentLog(log: InsertPaymentLog) {
+    const [info] = await db.insert(paymentLogs).values(log);
+    const [res] = await db.select().from(paymentLogs).where(eq(paymentLogs.id, info.insertId));
     return res;
   }
 
@@ -489,7 +607,8 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(projectFiles).where(eq(projectFiles.projectId, projectId));
   }
   async createFile(f: InsertProjectFile) {
-    const [res] = await db.insert(projectFiles).values(f).returning();
+    const [info] = await db.insert(projectFiles).values(f);
+    const [res] = await db.select().from(projectFiles).where(eq(projectFiles.id, info.insertId));
     return res;
   }
   async getFileById(id: number) {
@@ -510,11 +629,13 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(updateRequests);
   }
   async createUpdateRequest(r: InsertUpdateRequest) {
-    const [res] = await db.insert(updateRequests).values(r).returning();
+    const [info] = await db.insert(updateRequests).values(r);
+    const [res] = await db.select().from(updateRequests).where(eq(updateRequests.id, info.insertId));
     return res;
   }
   async replyToUpdateRequest(id: number, reply: string) {
-    const [res] = await db.update(updateRequests).set({ adminReply: reply, status: "replied" }).where(eq(updateRequests.id, id)).returning();
+    await db.update(updateRequests).set({ adminReply: reply, status: "replied" }).where(eq(updateRequests.id, id));
+    const [res] = await db.select().from(updateRequests).where(eq(updateRequests.id, id));
     return res;
   }
 
@@ -525,20 +646,24 @@ export class DatabaseStorage implements IStorage {
     return res;
   }
   async createWhatsappLead(l: InsertWhatsappLead) {
-    const [res] = await db.insert(whatsappLeads).values(l).returning();
+    const [info] = await db.insert(whatsappLeads).values(l);
+    const [res] = await db.select().from(whatsappLeads).where(eq(whatsappLeads.id, info.insertId));
     return res;
   }
   async updateWhatsappLeadStatus(id: number, status: string) {
-    const [res] = await db.update(whatsappLeads).set({ status }).where(eq(whatsappLeads.id, id)).returning();
+    await db.update(whatsappLeads).set({ status }).where(eq(whatsappLeads.id, id));
+    const [res] = await db.select().from(whatsappLeads).where(eq(whatsappLeads.id, id));
     return res;
   }
 
+  // ── Analytics
   async getAnalytics() {
-    const allClients = await this.getClients();
-    const allProjects = await this.getProjects();
-    const allInvoices = await this.getInvoices();
-    const allQuotes = await this.getQuotes();
-    const allMessages = await this.getContactMessages();
+    const allClients = await db.select().from(users).where(eq(users.role, "client"));
+    const allProjects = await db.select().from(projects);
+    const allInvoices = await db.select().from(invoices);
+    const allQuotes = await db.select().from(quotes);
+    const allMessages = await db.select().from(contactMessages);
+
     const totalRevenue = allInvoices.filter(i => i.status === "paid").reduce((sum, i) => sum + i.amount, 0);
     return {
       totalClients: allClients.length,
@@ -549,6 +674,69 @@ export class DatabaseStorage implements IStorage {
       unreadMessages: allMessages.filter(m => !m.read).length,
       monthlyData: [],
     };
+  }
+
+  // ── Messaging (Refactored)
+  async getConversationByProjectId(projectId: number): Promise<Conversation> {
+    const [existing] = await db.select().from(conversations).where(eq(conversations.projectId, projectId));
+    if (existing) return existing;
+
+    const [info] = await db.insert(conversations).values({ projectId });
+    const [created] = await db.select().from(conversations).where(eq(conversations.id, info.insertId));
+    return created;
+  }
+
+  async createMessage(m: InsertMessage): Promise<Message> {
+    const [info] = await db.insert(messages).values(m);
+    const [res] = await db.select().from(messages).where(eq(messages.id, info.insertId));
+    return res;
+  }
+
+  async getMessagesByConversationId(conversationId: number): Promise<(Message & { attachments: Attachment[] })[]> {
+    const msgs = await db.select().from(messages).where(eq(messages.conversationId, conversationId));
+    const result = [];
+    for (const m of msgs) {
+      const atts = await db.select().from(attachments).where(eq(attachments.messageId, m.id));
+      result.push({ ...m, attachments: atts });
+    }
+    return result;
+  }
+
+  async createAttachment(a: InsertAttachment): Promise<Attachment> {
+    const [info] = await db.insert(attachments).values(a);
+    const [res] = await db.select().from(attachments).where(eq(attachments.id, info.insertId));
+    return res;
+  }
+
+  // ── Migration Logic
+  async updateConversationStatus(id: number, data: { adminLastReadAt?: Date; clientLastReadAt?: Date }) {
+    await db.update(conversations).set(data).where(eq(conversations.id, id));
+  }
+
+  async migrateCommentsToMessages() {
+    const comments = await db.select().from(projectComments);
+    if (comments.length === 0) return;
+
+    for (const c of comments) {
+      if (!c.projectId) continue;
+      const conv = await this.getConversationByProjectId(c.projectId);
+
+      // Check if message already exists (simple check by content + time)
+      const [existing] = await db.select().from(messages).where(and(
+        eq(messages.conversationId, conv.id),
+        eq(messages.content, c.content || ""),
+        eq(messages.senderId, c.userId || 0)
+      ));
+
+      if (!existing) {
+        await this.createMessage({
+          conversationId: conv.id,
+          senderRole: c.userId === 1 ? "admin" : "client",
+          senderId: c.userId || 1,
+          content: c.content
+        });
+      }
+    }
   }
 }
 

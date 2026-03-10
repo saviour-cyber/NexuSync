@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { io } from "socket.io-client";
 import { AdminLayout } from "@/components/AdminLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,9 +8,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Pencil, Trash2, X, Check, FolderKanban, CalendarDays, ListChecks, MessageSquare, Paperclip, Milestone as MilestoneIcon, FileText } from "lucide-react";
+import { Plus, Pencil, Trash2, X, Check, FolderKanban, CalendarDays, ListChecks, MessageSquare, Paperclip, Milestone as MilestoneIcon, FileText, Download } from "lucide-react";
 import { format } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
+import { useToast } from "@/hooks/use-toast";
 
 type Project = { id: number; title: string; description?: string | null; status: string; clientId?: number | null; progress?: number | null; deadline?: any; budget?: number | null };
 type Task = { id: number; title: string; status: string; priority: string; projectId?: number | null };
@@ -32,11 +34,13 @@ const taskStatusColors: Record<string, string> = {
 
 export default function AdminProjects() {
     const qc = useQueryClient();
+    const { toast } = useToast();
     const [showForm, setShowForm] = useState(false);
     const [selectedProject, setSelectedProject] = useState<Project | null>(null);
     const [taskTitle, setTaskTitle] = useState("");
     const [milestoneTitle, setMilestoneTitle] = useState("");
     const [commentContent, setCommentContent] = useState("");
+    const chatFileRef = useRef<HTMLInputElement>(null);
     const [form, setForm] = useState({ title: "", description: "", status: "active", progress: 0, budget: 0 });
 
     const { data: projects = [] } = useQuery<Project[]>({
@@ -74,12 +78,15 @@ export default function AdminProjects() {
         onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/admin/tasks"] }),
     });
 
+    const [typingUser, setTypingUser] = useState<string | null>(null);
+    const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
     const projectTasks = allTasks.filter(t => t.projectId === selectedProject?.id);
     const projectId = selectedProject?.id;
 
-    const { data: comments = [] } = useQuery<ProjectComment[]>({
-        queryKey: ["/api/admin/comments", projectId],
-        queryFn: () => projectId ? fetch(`/api/admin/comments?projectId=${projectId}`, { credentials: "include" }).then(r => r.json()) : Promise.resolve([]),
+    const { data: messages = [] } = useQuery<any[]>({
+        queryKey: ["/api/projects", selectedProject?.id, "messages"],
+        queryFn: () => projectId ? fetch(`/api/projects/${projectId}/messages`, { credentials: "include" }).then(r => r.json()) : Promise.resolve([]),
         enabled: !!projectId,
     });
 
@@ -95,9 +102,70 @@ export default function AdminProjects() {
         enabled: !!projectId,
     });
 
-    const createComment = useMutation({
-        mutationFn: (content: string) => fetch("/api/admin/comments", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ projectId, content }) }).then(r => r.json()),
-        onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/admin/comments", projectId] }); setCommentContent(""); },
+    // Socket.IO Setup
+    useEffect(() => {
+        if (!selectedProject?.id) return;
+
+        const socket = io(window.location.origin, {
+            path: "/socket.io"
+        });
+
+        socket.emit("joinProject", selectedProject.id);
+
+        socket.on("receiveMessage", (newMessage) => {
+            qc.setQueryData(["/api/projects", selectedProject.id, "messages"], (old: any[] = []) => {
+                const exists = old.find(m => m.id === newMessage.id);
+                if (exists) return old;
+                return [...old, newMessage];
+            });
+            // Refresh project list to update unread counts
+            qc.invalidateQueries({ queryKey: ["/api/admin/projects"] });
+        });
+
+        socket.on("userTyping", (data: { senderRole: string }) => {
+            if (data.senderRole === "client") setTypingUser("Client");
+        });
+
+        socket.on("userStopTyping", () => {
+            setTypingUser(null);
+        });
+
+        return () => {
+            socket.disconnect();
+        };
+    }, [selectedProject?.id, qc]);
+
+    const handleTyping = () => {
+        if (!selectedProject?.id) return;
+        const socket = io(window.location.origin, { path: "/socket.io" });
+        socket.emit("typing", { projectId: selectedProject.id, senderRole: "admin" });
+
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = setTimeout(() => {
+            socket.emit("stopTyping", { projectId: selectedProject.id, senderRole: "admin" });
+        }, 2000);
+    };
+
+    const sendMessageMut = useMutation({
+        mutationFn: async ({ content, file }: { content: string, file?: File }) => {
+            const fd = new FormData();
+            fd.append("projectId", selectedProject!.id.toString());
+            fd.append("content", content);
+            fd.append("senderRole", "admin");
+            if (file) fd.append("file", file);
+
+            const r = await fetch("/api/messages", {
+                method: "POST",
+                body: fd,
+                credentials: "include"
+            });
+            if (!r.ok) throw new Error("Failed to send message");
+            return r.json();
+        },
+        onSuccess: () => {
+            setCommentContent("");
+            if (chatFileRef.current) chatFileRef.current.value = "";
+        },
     });
 
     const createFile = useMutation({
@@ -187,7 +255,14 @@ export default function AdminProjects() {
                                 <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
                                     <FolderKanban className="w-5 h-5 text-primary" />
                                 </div>
-                                <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColors[p.status] || "bg-slate-100"}`}>{p.status}</span>
+                                <div className="flex flex-col items-end gap-1">
+                                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColors[p.status] || "bg-slate-100"}`}>{p.status}</span>
+                                    {(p as any).unreadCount > 0 && (
+                                        <span className="bg-red-500 text-white text-[10px] h-4 w-4 flex items-center justify-center rounded-full animate-bounce">
+                                            {(p as any).unreadCount}
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                             <h3 className="font-bold text-secondary mb-2">{p.title}</h3>
                             {p.description && <p className="text-muted-foreground text-xs mb-3 line-clamp-2">{p.description}</p>}
@@ -326,23 +401,78 @@ export default function AdminProjects() {
                                     </TabsContent>
 
                                     <TabsContent value="messages" className="space-y-4">
-                                        <div className="h-64 overflow-y-auto space-y-4 p-4 bg-slate-50 rounded-xl border border-border/50 mb-4 flex flex-col-reverse">
-                                            {/* Messages are usually ordered by newest first from DB, but map reverses them visually if we use flex-col-reverse. Let's just map normally if they are oldest first */}
-                                            <div className="flex flex-col gap-3">
-                                                {comments.map(c => (
-                                                    <div key={c.id} className={`p-3 rounded-xl max-w-[85%] ${c.userId === 1 ? "bg-primary text-primary-foreground self-end rounded-tr-none ml-auto" : "bg-white border text-secondary self-start rounded-tl-none mr-auto"}`}>
-                                                        <p className="text-sm">{c.content}</p>
-                                                        <span className="text-[10px] opacity-70 mt-1 block">{format(new Date(c.createdAt), "h:mm a")}</span>
+                                        <div className="h-[400px] overflow-y-auto space-y-4 p-4 bg-slate-50 rounded-xl border border-border/50 mb-4">
+                                            <div className="flex flex-col gap-4">
+                                                {messages.map(m => {
+                                                    const isMe = m.senderRole === "admin";
+                                                    return (
+                                                        <div key={m.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
+                                                            <div className={`max-w-[80%] space-y-2`}>
+                                                                <div className={`p-3 rounded-xl shadow-sm border ${isMe ? "bg-primary text-primary-foreground border-primary rounded-tr-none ml-auto" : "bg-white text-secondary border-border rounded-tl-none mr-auto"}`}>
+                                                                    {m.content && <p className="text-sm leading-relaxed whitespace-pre-wrap">{m.content}</p>}
+
+                                                                    {m.attachments && m.attachments.length > 0 && (
+                                                                        <div className="mt-2 space-y-1">
+                                                                            {m.attachments.map((a: any) => (
+                                                                                <a key={a.id} href={a.fileUrl} target="_blank" rel="noreferrer"
+                                                                                    className={`flex items-center gap-2 p-2 rounded-lg text-xs border ${isMe ? "bg-white/10 border-white/20 hover:bg-white/20" : "bg-slate-50 border-slate-200 hover:bg-slate-100"}`}>
+                                                                                    <Paperclip className="w-3 h-3" />
+                                                                                    <span className="truncate max-w-[150px]">{a.fileName}</span>
+                                                                                    <Download className="w-3 h-3 ml-auto opacity-60" />
+                                                                                </a>
+                                                                            ))}
+                                                                        </div>
+                                                                    )}
+
+                                                                    <span className={`text-[10px] opacity-70 mt-1 block ${isMe ? "text-right" : "text-left"}`}>
+                                                                        {format(new Date(m.createdAt), "h:mm a")}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                                {typingUser && (
+                                                    <div className="flex justify-start">
+                                                        <div className="bg-slate-200/50 px-3 py-1.5 rounded-full text-[10px] text-muted-foreground animate-pulse flex items-center gap-2">
+                                                            <div className="flex gap-1">
+                                                                <div className="w-1 h-1 bg-slate-400 rounded-full animate-bounce" />
+                                                                <div className="w-1 h-1 bg-slate-400 rounded-full animate-bounce [animation-delay:0.2s]" />
+                                                                <div className="w-1 h-1 bg-slate-400 rounded-full animate-bounce [animation-delay:0.4s]" />
+                                                            </div>
+                                                            Client is typing...
+                                                        </div>
                                                     </div>
-                                                ))}
+                                                )}
                                             </div>
-                                            {comments.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No messages yet.</p>}
+                                            {messages.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No messages yet.</p>}
                                         </div>
                                         <div className="flex gap-2">
-                                            <Input placeholder="Type a message..." value={commentContent} onChange={e => setCommentContent(e.target.value)}
-                                                onKeyDown={e => { if (e.key === "Enter" && commentContent.trim()) createComment.mutate(commentContent); }}
-                                            />
-                                            <Button onClick={() => { if (commentContent.trim()) createComment.mutate(commentContent); }}><MessageSquare className="w-4 h-4" /></Button>
+                                            <div className="relative flex-1">
+                                                <Input placeholder="Type a message..." value={commentContent}
+                                                    onChange={e => {
+                                                        setCommentContent(e.target.value);
+                                                        handleTyping();
+                                                    }}
+                                                    onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && commentContent.trim()) { e.preventDefault(); sendMessageMut.mutate({ content: commentContent }); } }}
+                                                    className="pr-10"
+                                                />
+                                                <button
+                                                    onClick={() => chatFileRef.current?.click()}
+                                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary transition-colors"
+                                                >
+                                                    <Paperclip className="w-4 h-4" />
+                                                </button>
+                                                <input type="file" ref={chatFileRef} className="hidden" onChange={(e) => {
+                                                    const file = e.target.files?.[0];
+                                                    if (file) {
+                                                        sendMessageMut.mutate({ content: commentContent, file });
+                                                    }
+                                                }} />
+                                            </div>
+                                            <Button onClick={() => { if (commentContent.trim()) sendMessageMut.mutate({ content: commentContent }); }} disabled={sendMessageMut.isPending}>
+                                                {sendMessageMut.isPending ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <MessageSquare className="w-4 h-4" />}
+                                            </Button>
                                         </div>
                                     </TabsContent>
                                 </Tabs>

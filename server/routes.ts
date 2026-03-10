@@ -7,6 +7,8 @@ import session from "express-session";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import { Server as SocketIOServer } from "socket.io";
+import crypto from "crypto";
 
 // Ensure uploads directory exists
 const uploadDir = path.join(process.cwd(), "uploads");
@@ -41,6 +43,40 @@ function requireAdmin(req: Request, res: Response, next: NextFunction) {
 
 // ─── Routes ────────────────────────────────────────────────────────────────
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
+  const io = new SocketIOServer(httpServer, {
+    cors: { origin: "*" },
+    path: "/socket.io"
+  });
+
+  // Run migration
+  storage.migrateCommentsToMessages().catch(err => console.error("Migration failed:", err));
+
+  io.on("connection", (socket) => {
+    socket.on("joinProject", (projectId: number) => {
+      socket.join(`project_${projectId}`);
+      // console.log(`Socket ${socket.id} joined project_${projectId}`);
+    });
+
+    socket.on("sendMessage", async (data: any) => {
+      const { projectId, content, senderRole, senderId } = data;
+      const conv = await storage.getConversationByProjectId(projectId);
+      const msg = await storage.createMessage({
+        conversationId: conv.id,
+        content,
+        senderRole,
+        senderId
+      });
+      io.to(`project_${projectId}`).emit("receiveMessage", { ...msg, attachments: [] });
+    });
+
+    socket.on("typing", (data: { projectId: number, senderRole: string }) => {
+      socket.to(`project_${data.projectId}`).emit("userTyping", data);
+    });
+
+    socket.on("stopTyping", (data: { projectId: number, senderRole: string }) => {
+      socket.to(`project_${data.projectId}`).emit("userStopTyping", data);
+    });
+  });
 
   // ── PUBLIC: Services ─────────────────────────────────────────────────────
   app.get("/api/services", async (_req, res) => {
@@ -189,14 +225,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.put("/api/admin/services/:id", requireAdmin, async (req, res) => {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     const updated = await storage.updateService(id, req.body);
     if (!updated) return res.status(404).json({ message: "Service not found" });
     res.json(updated);
   });
 
   app.delete("/api/admin/services/:id", requireAdmin, async (req, res) => {
-    await storage.deleteService(parseInt(req.params.id));
+    await storage.deleteService(parseInt(req.params.id as string));
     res.json({ ok: true });
   });
 
@@ -217,8 +253,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ── ADMIN: Projects ───────────────────────────────────────────────────────
-  app.get("/api/admin/projects", requireAdmin, async (_req, res) => {
-    res.json(await storage.getProjects());
+  app.get("/api/admin/projects", requireAuth, requireAdmin, async (req, res) => {
+    const projs = await storage.getProjects();
+    const enriched = await Promise.all(projs.map(async p => {
+      const conv = await storage.getConversationByProjectId(p.id);
+      const messages = await storage.getMessagesByConversationId(conv.id);
+      const unreadCount = messages.filter(m => (m.createdAt || new Date(0)) > (conv.adminLastReadAt || new Date(0))).length;
+      return { ...p, unreadCount };
+    }));
+    res.json(enriched);
   });
 
   app.post("/api/admin/projects", requireAdmin, async (req, res) => {
@@ -232,19 +275,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.put("/api/admin/projects/:id", requireAdmin, async (req, res) => {
-    const updated = await storage.updateProject(parseInt(req.params.id), req.body);
+    const updated = await storage.updateProject(parseInt(req.params.id as string), req.body);
     if (!updated) return res.status(404).json({ message: "Project not found" });
     res.json(updated);
   });
 
   app.delete("/api/admin/projects/:id", requireAdmin, async (req, res) => {
-    await storage.deleteProject(parseInt(req.params.id));
+    await storage.deleteProject(parseInt(req.params.id as string));
     res.json({ ok: true });
   });
 
   app.post("/api/admin/projects/:id/invoice", requireAdmin, async (req, res) => {
     try {
-      const projectId = parseInt(req.params.id);
+      const projectId = parseInt(req.params.id as string);
       const project = await storage.getProjectById(projectId);
       if (!project) return res.status(404).json({ message: "Project not found" });
       if (!project.clientId) return res.status(400).json({ message: "Project has no client assigned" });
@@ -283,7 +326,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.put("/api/admin/tasks/:id", requireAdmin, async (req, res) => {
-    const updated = await storage.updateTask(parseInt(req.params.id), req.body);
+    const updated = await storage.updateTask(parseInt(req.params.id as string), req.body);
     if (!updated) return res.status(404).json({ message: "Task not found" });
     res.json(updated);
   });
@@ -305,7 +348,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.put("/api/admin/milestones/:id", requireAdmin, async (req, res) => {
-    const updated = await storage.updateMilestone(parseInt(req.params.id), req.body);
+    const updated = await storage.updateMilestone(parseInt(req.params.id as string), req.body);
     if (!updated) return res.status(404).json({ message: "Milestone not found" });
     res.json(updated);
   });
@@ -317,14 +360,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/admin/quotes/:id/convert", requireAdmin, async (req, res) => {
     try {
-      const quoteId = parseInt(req.params.id);
+      const quoteId = parseInt(req.params.id as string);
       const quote = await storage.getQuoteById(quoteId);
 
       if (!quote) return res.status(404).json({ message: "Quote not found" });
       if (quote.status === "approved") return res.status(400).json({ message: "Quote already converted" });
 
       // 1. Find or create the client user
-      let user = await storage.getUserByEmail(quote.email);
+      let user: any = await storage.getUserByEmail(quote.email);
       if (!user) {
         user = await storage.createUser({
           name: quote.name,
@@ -373,7 +416,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.put("/api/admin/quotes/:id", requireAdmin, async (req, res) => {
-    const updated = await storage.updateQuote(parseInt(req.params.id), req.body);
+    const updated = await storage.updateQuote(parseInt(req.params.id as string), req.body);
     if (!updated) return res.status(404).json({ message: "Quote not found" });
     res.json(updated);
   });
@@ -384,7 +427,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.put("/api/admin/messages/:id/read", requireAdmin, async (req, res) => {
-    await storage.markMessageRead(parseInt(req.params.id));
+    await storage.markMessageRead(parseInt(req.params.id as string));
     res.json({ ok: true });
   });
 
@@ -400,7 +443,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/admin/leads/:id/convert", requireAdmin, async (req, res) => {
     try {
-      const leadId = parseInt(req.params.id);
+      const leadId = parseInt(req.params.id as string);
       const lead = await storage.getWhatsappLeadById(leadId);
 
       if (!lead) return res.status(404).json({ message: "Lead not found" });
@@ -430,7 +473,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.patch("/api/admin/leads/:id", requireAdmin, async (req, res) => {
     const { status } = req.body;
     if (!status) return res.status(400).json({ message: "Status is required" });
-    const updated = await storage.updateWhatsappLeadStatus(parseInt(req.params.id), status);
+    const updated = await storage.updateWhatsappLeadStatus(parseInt(req.params.id as string), status);
     if (!updated) return res.status(404).json({ message: "Lead not found" });
     res.json(updated);
   });
@@ -463,24 +506,182 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.put("/api/admin/invoices/:id", requireAdmin, async (req, res) => {
-    const updated = await storage.updateInvoice(parseInt(req.params.id), req.body);
+    const updated = await storage.updateInvoice(parseInt(req.params.id as string), req.body);
     if (!updated) return res.status(404).json({ message: "Invoice not found" });
     res.json(updated);
   });
 
-  // ── ADMIN: Comments ───────────────────────────────────────────────────────
-  app.get("/api/admin/comments", requireAdmin, async (req, res) => {
-    const projectId = req.query.projectId ? parseInt(req.query.projectId as string) : undefined;
-    res.json(await storage.getComments(projectId));
+  // ─── B2B Payment Integration ───────────────────────────────────────────────
+  
+  // M-Pesa STK Push (Initiate Payment)
+  app.post("/api/payments/mpesa/initiate", requireAuth, async (req, res) => {
+    try {
+      const { invoiceId, phoneNumber } = req.body;
+      const invoice = await storage.getInvoiceById(parseInt(invoiceId));
+      
+      if (!invoice) return res.status(404).json({ message: "Invoice not found" });
+      if (invoice.status === "paid") return res.status(400).json({ message: "Invoice already paid" });
+
+      // Generate a mock transaction ID for the STK push
+      const mockTxnId = `MPESA_${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
+
+      // Log the payment attempt
+      await storage.createPaymentLog({
+        invoiceId: invoice.id,
+        method: "mpesa",
+        status: "pending",
+        transactionId: mockTxnId,
+        amount: invoice.amount
+      });
+
+      // Update invoice status to reflect payment is processing
+      await storage.updateInvoice(invoice.id, { 
+        status: "pending",
+        paymentMethod: "mpesa",
+        paymentReference: mockTxnId
+      });
+
+      // Simulate a successful STK prompt dispatch
+      res.json({ 
+        message: "STK Push initiated successfully", 
+        transactionId: mockTxnId,
+        status: "pending"
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to initiate M-Pesa payment" });
+    }
   });
 
-  app.post("/api/admin/comments", requireAdmin, async (req, res) => {
+  // M-Pesa Webhook Callback (Simulated Daraja Response)
+  app.post("/api/payments/mpesa/webhook", async (req, res) => {
     try {
-      const input = insertProjectCommentSchema.parse(req.body);
-      res.status(201).json(await storage.createComment(input));
+      const { transactionId, status, amount } = req.body;
+      
+      // Look up payment log to find the invoice
+      // In a real scenario, you'd query the DB by transactionId.
+      // We will perform a basic search on pending invoices for demonstration.
+      const allInvoices = await storage.getInvoices();
+      const invoice = allInvoices.find(i => i.paymentReference === transactionId);
+
+      if (!invoice) return res.status(404).json({ message: "Transaction not found" });
+
+      if (status === "success") {
+        await storage.updateInvoice(invoice.id, { 
+          status: "paid", 
+          paidAt: new Date()
+        });
+        
+        // Log the successful webhook
+        await storage.createPaymentLog({
+          invoiceId: invoice.id,
+          method: "mpesa",
+          status: "success",
+          transactionId,
+          amount: amount || invoice.amount
+        });
+      } else {
+        await storage.updateInvoice(invoice.id, { status: "failed" });
+        await storage.createPaymentLog({
+          invoiceId: invoice.id,
+          method: "mpesa",
+          status: "failed",
+          transactionId,
+          amount: amount || invoice.amount
+        });
+      }
+
+      res.sendStatus(200);
     } catch (err) {
-      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
-      throw err;
+      console.error(err);
+      res.status(500).json({ message: "Webhook error" });
+    }
+  });
+
+  // Admin Bank Transfer Verification
+  app.post("/api/admin/payments/bank/verify", requireAdmin, async (req, res) => {
+    try {
+      const { invoiceId, reference, amount } = req.body;
+      const invoice = await storage.getInvoiceById(parseInt(invoiceId));
+
+      if (!invoice) return res.status(404).json({ message: "Invoice not found" });
+      if (invoice.status === "paid") return res.status(400).json({ message: "Invoice already paid" });
+
+      // Mark as paid
+      await storage.updateInvoice(invoice.id, { 
+        status: "paid",
+        paymentMethod: "bank",
+        paymentReference: reference,
+        paidAt: new Date()
+      });
+
+      // Log the verified payment
+      await storage.createPaymentLog({
+        invoiceId: invoice.id,
+        method: "bank",
+        status: "success",
+        transactionId: reference,
+        amount: amount || invoice.amount
+      });
+
+      res.json({ message: "Bank payment verified and invoice marked as paid" });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to verify bank payment" });
+    }
+  });
+
+  // ─── Messaging (Refactored) ────────────────────────────────────────────────
+  app.get("/api/projects/:projectId/messages", requireAuth, async (req, res) => {
+    const projectId = parseInt(req.params.projectId as string);
+    try {
+      const conv = await storage.getConversationByProjectId(projectId);
+      const messages = await storage.getMessagesByConversationId(conv.id);
+
+      // Update read status
+      const user = await storage.getUserById(req.session.userId!);
+      if (user?.role === "admin") {
+        await storage.updateConversationStatus(conv.id, { adminLastReadAt: new Date() });
+      } else {
+        await storage.updateConversationStatus(conv.id, { clientLastReadAt: new Date() });
+      }
+
+      res.json(messages);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to load messages" });
+    }
+  });
+
+  app.post("/api/messages", requireAuth, upload.single("file"), async (req, res) => {
+    try {
+      const { projectId, content, senderRole } = req.body;
+      const senderId = req.session.userId!;
+      const pid = parseInt(projectId);
+
+      const conv = await storage.getConversationByProjectId(pid);
+      const msg = await storage.createMessage({
+        conversationId: conv.id,
+        content: content || null,
+        senderRole,
+        senderId
+      });
+
+      const attachmentsList = [];
+      if (req.file) {
+        const att = await storage.createAttachment({
+          messageId: msg.id,
+          fileName: req.file.originalname,
+          fileUrl: `/uploads/${req.file.filename}`
+        });
+        attachmentsList.push(att);
+      }
+
+      const fullMsg = { ...msg, attachments: attachmentsList };
+      io.to(`project_${pid}`).emit("receiveMessage", fullMsg);
+      res.status(201).json(fullMsg);
+    } catch (err) {
+      console.error("Message send error:", err);
+      res.status(500).json({ message: "Failed to send message" });
     }
   });
 
@@ -493,7 +694,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/admin/update-requests/:id/reply", requireAdmin, async (req, res) => {
     try {
       const { reply } = req.body;
-      const updated = await storage.replyToUpdateRequest(parseInt(req.params.id), reply);
+      const updated = await storage.replyToUpdateRequest(parseInt(req.params.id as string), reply);
       if (!updated) return res.status(404).json({ message: "Update request not found" });
       res.json(updated);
     } catch (err) {
@@ -527,7 +728,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.delete("/api/admin/files/:id", requireAdmin, async (req, res) => {
-    const fileId = parseInt(req.params.id);
+    const fileId = parseInt(req.params.id as string);
     const fileRecord = await storage.getFileById(fileId);
     if (!fileRecord) return res.status(404).json({ message: "File not found" });
 
@@ -557,7 +758,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/portal/quotes/:id/approve", requireAuth, async (req, res) => {
     try {
-      const quoteId = parseInt(req.params.id);
+      const quoteId = parseInt(req.params.id as string);
       const quote = await storage.getQuoteById(quoteId);
       if (!quote) return res.status(404).json({ message: "Quote not found" });
 
@@ -595,7 +796,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/portal/quotes/:id/reject", requireAuth, async (req, res) => {
     try {
-      const quoteId = parseInt(req.params.id);
+      const quoteId = parseInt(req.params.id as string);
       const quote = await storage.getQuoteById(quoteId);
       if (!quote) return res.status(404).json({ message: "Quote not found" });
 
@@ -612,21 +813,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/portal/invoices", requireAuth, async (req, res) => {
     const clientId = req.session.userId!;
     res.json(await storage.getInvoices(clientId));
-  });
-
-  app.get("/api/portal/comments", requireAuth, async (req, res) => {
-    const projectId = req.query.projectId ? parseInt(req.query.projectId as string) : undefined;
-    res.json(await storage.getComments(projectId));
-  });
-
-  app.post("/api/portal/comments", requireAuth, async (req, res) => {
-    try {
-      const input = insertProjectCommentSchema.parse({ ...req.body, userId: req.session.userId });
-      res.status(201).json(await storage.createComment(input));
-    } catch (err) {
-      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
-      throw err;
-    }
   });
 
   // ── PORTAL: Milestones ────────────────────────────────────────────────────
@@ -700,11 +886,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Download Route (used by both Admin & Portal)
   app.get("/api/files/:id/download", requireAuth, async (req, res) => {
-    const fileRecord = await storage.getFileById(parseInt(req.params.id));
+    const fileRecord = await storage.getFileById(parseInt(req.params.id as string));
     if (!fileRecord) return res.status(404).json({ message: "File not found" });
 
     // Restrict to owner or admin
-    if (req.user?.role !== "admin") {
+    if (req.session.userRole !== "admin") {
       const projects = await storage.getProjectsByClientId(req.session.userId!);
       if (!projects.some(p => p.id === fileRecord.projectId)) {
         return res.status(403).json({ message: "Forbidden" });

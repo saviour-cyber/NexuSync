@@ -14,3 +14,5 @@ yarn-debug.log*
 yarn-error.log*
 .venv/
 __pycache__/
+tsc_output*.txt
+uploads/

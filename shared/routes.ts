@@ -123,6 +123,7 @@ export const api = {
   contactMessages: {
     create: {
       path: "/api/contact",
+      method: "POST",
       input: insertContactMessageSchema,
       responses: { 201: ContactMessageSchema },
     },

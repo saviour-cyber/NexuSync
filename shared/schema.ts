@@ -1,146 +1,185 @@
-import { sqliteTable, text, integer, } from "drizzle-orm/sqlite-core";
+import { mysqlTable, text, int, timestamp, boolean, varchar } from "drizzle-orm/mysql-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 // ─── Services ────────────────────────────────────────────────────────────────
-export const services = sqliteTable("services", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  title: text("title").notNull(),
+export const services = mysqlTable("services", {
+  id: int("id").primaryKey().autoincrement(),
+  title: varchar("title", { length: 255 }).notNull(),
   description: text("description").notNull(),
-  icon: text("icon").notNull(),
-  basePrice: integer("base_price").default(0),
+  icon: varchar("icon", { length: 255 }).notNull(),
+  basePrice: int("base_price").default(0),
 });
 
 // ─── Users ───────────────────────────────────────────────────────────────────
-export const users = sqliteTable("users", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  name: text("name").notNull(),
-  email: text("email").notNull().unique(),
+export const users = mysqlTable("users", {
+  id: int("id").primaryKey().autoincrement(),
+  name: varchar("name", { length: 255 }).notNull(),
+  email: varchar("email", { length: 255 }).notNull().unique(),
   passwordHash: text("password_hash").notNull(),
-  role: text("role").notNull().default("client"),
-  company: text("company"),
-  phone: text("phone"),
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  role: varchar("role", { length: 50 }).notNull().default("client"),
+  company: varchar("company", { length: 255 }),
+  phone: varchar("phone", { length: 50 }),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // ─── Projects ────────────────────────────────────────────────────────────────
-export const projects = sqliteTable("projects", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  title: text("title").notNull(),
+export const projects = mysqlTable("projects", {
+  id: int("id").primaryKey().autoincrement(),
+  title: varchar("title", { length: 255 }).notNull(),
   description: text("description"),
-  status: text("status").notNull().default("active"),
-  clientId: integer("client_id").references(() => users.id),
-  serviceId: integer("service_id").references(() => services.id),
-  deadline: integer("deadline", { mode: "timestamp" }),
-  budget: integer("budget"),
-  progress: integer("progress").default(0),
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  status: varchar("status", { length: 50 }).notNull().default("active"),
+  clientId: int("client_id").references(() => users.id),
+  serviceId: int("service_id").references(() => services.id),
+  deadline: timestamp("deadline"),
+  budget: int("budget"),
+  progress: int("progress").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
 });
 
 // ─── Tasks ────────────────────────────────────────────────────────────────────
-export const tasks = sqliteTable("tasks", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  title: text("title").notNull(),
+export const tasks = mysqlTable("tasks", {
+  id: int("id").primaryKey().autoincrement(),
+  title: varchar("title", { length: 255 }).notNull(),
   description: text("description"),
-  projectId: integer("project_id").references(() => projects.id),
-  assignedTo: integer("assigned_to").references(() => users.id),
-  status: text("status").notNull().default("todo"),
-  priority: text("priority").notNull().default("medium"),
-  deadline: integer("deadline", { mode: "timestamp" }),
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  projectId: int("project_id").references(() => projects.id),
+  assignedTo: int("assigned_to").references(() => users.id),
+  status: varchar("status", { length: 50 }).notNull().default("todo"),
+  priority: varchar("priority", { length: 50 }).notNull().default("medium"),
+  deadline: timestamp("deadline"),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // ─── Milestones ───────────────────────────────────────────────────────────────
-export const milestones = sqliteTable("milestones", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  title: text("title").notNull(),
-  projectId: integer("project_id").references(() => projects.id),
-  dueDate: integer("due_date", { mode: "timestamp" }),
-  completed: integer("completed", { mode: "boolean" }).default(false),
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+export const milestones = mysqlTable("milestones", {
+  id: int("id").primaryKey().autoincrement(),
+  title: varchar("title", { length: 255 }).notNull(),
+  projectId: int("project_id").references(() => projects.id),
+  dueDate: timestamp("due_date"),
+  completed: boolean("completed").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // ─── Quotes ───────────────────────────────────────────────────────────────────
-export const quotes = sqliteTable("quotes", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  name: text("name").notNull(),
-  email: text("email").notNull(),
-  phone: text("phone"),
+export const quotes = mysqlTable("quotes", {
+  id: int("id").primaryKey().autoincrement(),
+  name: varchar("name", { length: 255 }).notNull(),
+  email: varchar("email", { length: 255 }).notNull(),
+  phone: varchar("phone", { length: 50 }),
   serviceIds: text("service_ids").notNull(),
   projectDetails: text("project_details").notNull(),
-  budget: text("budget"),
-  timeline: text("timeline"),
-  status: text("status").notNull().default("pending"),
-  estimatedPrice: integer("estimated_price"),
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  budget: varchar("budget", { length: 100 }),
+  timeline: varchar("timeline", { length: 100 }),
+  status: varchar("status", { length: 50 }).notNull().default("pending"),
+  estimatedPrice: int("estimated_price"),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // ─── Contact Messages ─────────────────────────────────────────────────────────
-export const contactMessages = sqliteTable("contact_messages", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  name: text("name").notNull(),
-  email: text("email").notNull(),
-  phone: text("phone"),
+export const contactMessages = mysqlTable("contact_messages", {
+  id: int("id").primaryKey().autoincrement(),
+  name: varchar("name", { length: 255 }).notNull(),
+  email: varchar("email", { length: 255 }).notNull(),
+  phone: varchar("phone", { length: 50 }),
   message: text("message").notNull(),
-  read: integer("read", { mode: "boolean" }).default(false),
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  read: boolean("read").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // ─── Project Comments ─────────────────────────────────────────────────────────
-export const projectComments = sqliteTable("project_comments", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  projectId: integer("project_id").references(() => projects.id),
-  userId: integer("user_id").references(() => users.id),
+export const projectComments = mysqlTable("project_comments", {
+  id: int("id").primaryKey().autoincrement(),
+  projectId: int("project_id").references(() => projects.id),
+  userId: int("user_id").references(() => users.id),
   content: text("content").notNull(),
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // ─── Invoices ─────────────────────────────────────────────────────────────────
-export const invoices = sqliteTable("invoices", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  projectId: integer("project_id").references(() => projects.id),
-  clientId: integer("client_id").references(() => users.id),
-  amount: integer("amount").notNull(),
-  status: text("status").notNull().default("unpaid"),
-  dueDate: integer("due_date", { mode: "timestamp" }),
-  paidAt: integer("paid_at", { mode: "timestamp" }),
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+export const invoices = mysqlTable("invoices", {
+  id: int("id").primaryKey().autoincrement(),
+  projectId: int("project_id").references(() => projects.id),
+  clientId: int("client_id").references(() => users.id),
+  amount: int("amount").notNull(),
+  status: varchar("status", { length: 50 }).notNull().default("unpaid"), // pending, paid, partially_paid, unpaid
+  paymentMethod: varchar("payment_method", { length: 50 }), // mpesa, bank
+  paymentReference: varchar("payment_reference", { length: 255 }), // txn id
+  dueDate: timestamp("due_date"),
+  paidAt: timestamp("paid_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// ─── Payment Logs ─────────────────────────────────────────────────────────────
+export const paymentLogs = mysqlTable("payment_logs", {
+  id: int("id").primaryKey().autoincrement(),
+  invoiceId: int("invoice_id").notNull().references(() => invoices.id),
+  method: varchar("method", { length: 50 }).notNull(), // mpesa, bank
+  status: varchar("status", { length: 50 }).notNull(), // pending, success, failed
+  transactionId: varchar("transaction_id", { length: 255 }),
+  amount: int("amount").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // ─── Project Files ────────────────────────────────────────────────────────────
-export const projectFiles = sqliteTable("project_files", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  projectId: integer("project_id").references(() => projects.id),
-  uploadedBy: integer("uploaded_by").references(() => users.id),
-  fileName: text("file_name").notNull(),
-  originalName: text("original_name").notNull(),
-  mimeType: text("mime_type").notNull(),
-  size: integer("size").notNull(),
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+export const projectFiles = mysqlTable("project_files", {
+  id: int("id").primaryKey().autoincrement(),
+  projectId: int("project_id").references(() => projects.id),
+  uploadedBy: int("uploaded_by").references(() => users.id),
+  fileName: varchar("file_name", { length: 255 }).notNull(),
+  originalName: varchar("original_name", { length: 255 }).notNull(),
+  mimeType: varchar("mime_type", { length: 100 }).notNull(),
+  size: int("size").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // ─── Update Requests ──────────────────────────────────────────────────────────
-export const updateRequests = sqliteTable("update_requests", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  projectId: integer("project_id").references(() => projects.id),
-  userId: integer("user_id").references(() => users.id),
-  subject: text("subject").notNull(),
+export const updateRequests = mysqlTable("update_requests", {
+  id: int("id").primaryKey().autoincrement(),
+  projectId: int("project_id").references(() => projects.id),
+  userId: int("user_id").references(() => users.id),
+  subject: varchar("subject", { length: 255 }).notNull(),
   message: text("message").notNull(),
-  status: text("status").notNull().default("pending"),
+  status: varchar("status", { length: 50 }).notNull().default("pending"),
   adminReply: text("admin_reply"),
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // ─── WhatsApp Leads ───────────────────────────────────────────────────────────
-export const whatsappLeads = sqliteTable("whatsapp_leads", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  name: text("name").notNull(),
-  phone: text("phone").notNull(),
-  service: text("service"),
+export const whatsappLeads = mysqlTable("whatsapp_leads", {
+  id: int("id").primaryKey().autoincrement(),
+  name: varchar("name", { length: 255 }).notNull(),
+  phone: varchar("phone", { length: 50 }).notNull(),
+  service: varchar("service", { length: 255 }),
   message: text("message"),
-  status: text("status").notNull().default("new"),
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  status: varchar("status", { length: 50 }).notNull().default("new"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// ─── Messaging (Refactored) ──────────────────────────────────────────────────
+export const conversations = mysqlTable("conversations", {
+  id: int("id").primaryKey().autoincrement(),
+  projectId: int("project_id").notNull().references(() => projects.id),
+  adminLastReadAt: timestamp("admin_last_read_at").defaultNow(),
+  clientLastReadAt: timestamp("client_last_read_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const messages = mysqlTable("messages", {
+  id: int("id").primaryKey().autoincrement(),
+  conversationId: int("conversation_id").notNull().references(() => conversations.id),
+  senderRole: varchar("sender_role", { length: 50 }).notNull(), // 'admin' | 'client'
+  senderId: int("sender_id").notNull().references(() => users.id),
+  content: text("content"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const attachments = mysqlTable("attachments", {
+  id: int("id").primaryKey().autoincrement(),
+  messageId: int("message_id").notNull().references(() => messages.id),
+  fileName: varchar("file_name", { length: 255 }).notNull(),
+  fileUrl: text("file_url").notNull(),
+  uploadedAt: timestamp("uploaded_at").defaultNow(),
 });
 
 // ─── Zod Schemas ─────────────────────────────────────────────────────────────
@@ -153,9 +192,13 @@ export const insertQuoteSchema = createInsertSchema(quotes).omit({ id: true, cre
 export const insertContactMessageSchema = createInsertSchema(contactMessages).omit({ id: true, createdAt: true, read: true });
 export const insertProjectCommentSchema = createInsertSchema(projectComments).omit({ id: true, createdAt: true });
 export const insertInvoiceSchema = createInsertSchema(invoices).omit({ id: true, createdAt: true, paidAt: true });
+export const insertPaymentLogSchema = createInsertSchema(paymentLogs).omit({ id: true, createdAt: true });
 export const insertProjectFileSchema = createInsertSchema(projectFiles).omit({ id: true, createdAt: true });
 export const insertUpdateRequestSchema = createInsertSchema(updateRequests).omit({ id: true, createdAt: true, status: true, adminReply: true });
 export const insertWhatsappLeadSchema = createInsertSchema(whatsappLeads).omit({ id: true, createdAt: true, status: true });
+export const insertConversationSchema = createInsertSchema(conversations).omit({ id: true, createdAt: true });
+export const insertMessageSchema = createInsertSchema(messages).omit({ id: true, createdAt: true });
+export const insertAttachmentSchema = createInsertSchema(attachments).omit({ id: true, uploadedAt: true });
 
 export const signUpSchema = z.object({
   clientName: z.string().min(2, "Name is required"),
@@ -195,6 +238,9 @@ export type InsertProjectComment = z.infer<typeof insertProjectCommentSchema>;
 export type Invoice = typeof invoices.$inferSelect;
 export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
 
+export type PaymentLog = typeof paymentLogs.$inferSelect;
+export type InsertPaymentLog = z.infer<typeof insertPaymentLogSchema>;
+
 export type ProjectFile = typeof projectFiles.$inferSelect;
 export type InsertProjectFile = z.infer<typeof insertProjectFileSchema>;
 
@@ -203,6 +249,15 @@ export type InsertUpdateRequest = z.infer<typeof insertUpdateRequestSchema>;
 
 export type WhatsappLead = typeof whatsappLeads.$inferSelect;
 export type InsertWhatsappLead = z.infer<typeof insertWhatsappLeadSchema>;
+
+export type Conversation = typeof conversations.$inferSelect;
+export type InsertConversation = z.infer<typeof insertConversationSchema>;
+
+export type Message = typeof messages.$inferSelect;
+export type InsertMessage = z.infer<typeof insertMessageSchema>;
+
+export type Attachment = typeof attachments.$inferSelect;
+export type InsertAttachment = z.infer<typeof insertAttachmentSchema>;
 
 // Aliases
 export type CreateServiceRequest = InsertService;

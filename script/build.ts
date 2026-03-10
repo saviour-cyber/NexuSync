@@ -30,6 +30,8 @@ const allowlist = [
   "xlsx",
   "zod",
   "zod-validation-error",
+  "mysql2",
+  "socket.io",
 ];
 
 async function buildAll() {

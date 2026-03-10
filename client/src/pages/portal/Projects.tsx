@@ -7,7 +7,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { FolderKanban, UploadCloud, MessageSquare, Download, FileText, CheckCircle2, File, Paperclip, Send, MilestoneIcon, ListChecks } from "lucide-react";
+import { FolderKanban, UploadCloud, MessageSquare, Download, FileText, CheckCircle2, File, Paperclip, Send, MilestoneIcon, ListChecks, ImageIcon } from "lucide-react";
+import { io } from "socket.io-client";
+import { useEffect } from "react";
 
 type ProjectComment = { id: number; content: string; createdAt: string; userId: number };
 type Milestone = { id: number; title: string; dueDate: string | null; completed: boolean; projectId: number };
@@ -16,6 +18,7 @@ export default function PortalProjects() {
     const { toast } = useToast();
     const queryClient = useQueryClient();
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const chatFileRef = useRef<HTMLInputElement>(null);
     const [selectedProject, setSelectedProject] = useState<any>(null);
     const [isUploadOpen, setIsUploadOpen] = useState(false);
     const [isRequestOpen, setIsRequestOpen] = useState(false);
@@ -39,9 +42,9 @@ export default function PortalProjects() {
         enabled: !!selectedProject,
     });
 
-    const { data: comments = [] } = useQuery<ProjectComment[]>({
-        queryKey: ["/api/portal/comments", selectedProject?.id],
-        queryFn: () => fetch(`/api/portal/comments?projectId=${selectedProject?.id}`, { credentials: "include" }).then(r => r.json()),
+    const { data: messages = [] } = useQuery<any[]>({
+        queryKey: ["/api/projects", selectedProject?.id, "messages"],
+        queryFn: () => fetch(`/api/projects/${selectedProject?.id}/messages`, { credentials: "include" }).then(r => r.json()),
         enabled: !!selectedProject,
     });
 
@@ -51,12 +54,74 @@ export default function PortalProjects() {
         enabled: !!selectedProject,
     });
 
-    // New state for chat
     const [commentContent, setCommentContent] = useState("");
+    const [typingUser, setTypingUser] = useState<string | null>(null);
+    const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-    const createComment = useMutation({
-        mutationFn: (content: string) => fetch("/api/portal/comments", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ projectId: selectedProject.id, content }) }).then(r => r.json()),
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/portal/comments", selectedProject?.id] }); setCommentContent(""); },
+    // Socket.IO Setup
+    useEffect(() => {
+        if (!selectedProject?.id) return;
+
+        const socket = io(window.location.origin, {
+            path: "/socket.io"
+        });
+
+        socket.emit("joinProject", selectedProject.id);
+
+        socket.on("receiveMessage", (newMessage) => {
+            queryClient.setQueryData(["/api/projects", selectedProject.id, "messages"], (old: any[] = []) => {
+                const exists = old.find(m => m.id === newMessage.id);
+                if (exists) return old;
+                return [...old, newMessage];
+            });
+            // Refresh project list to update unread counts
+            queryClient.invalidateQueries({ queryKey: ["/api/portal/projects"] });
+        });
+
+        socket.on("userTyping", (data: { senderRole: string }) => {
+            if (data.senderRole === "admin") setTypingUser("Admin");
+        });
+
+        socket.on("userStopTyping", () => {
+            setTypingUser(null);
+        });
+
+        return () => {
+            socket.disconnect();
+        };
+    }, [selectedProject?.id, queryClient]);
+
+    const handleTyping = () => {
+        if (!selectedProject?.id) return;
+        const socket = io(window.location.origin, { path: "/socket.io" }); // Simplified for logic
+        socket.emit("typing", { projectId: selectedProject.id, senderRole: "client" });
+
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = setTimeout(() => {
+            socket.emit("stopTyping", { projectId: selectedProject.id, senderRole: "client" });
+        }, 2000);
+    };
+
+    const sendMessageMut = useMutation({
+        mutationFn: async ({ content, file }: { content: string, file?: File }) => {
+            const fd = new FormData();
+            fd.append("projectId", selectedProject.id.toString());
+            fd.append("content", content);
+            fd.append("senderRole", "client");
+            if (file) fd.append("file", file);
+
+            const r = await fetch("/api/messages", {
+                method: "POST",
+                body: fd,
+                credentials: "include"
+            });
+            if (!r.ok) throw new Error("Failed to send message");
+            return r.json();
+        },
+        onSuccess: () => {
+            setCommentContent("");
+            if (chatFileRef.current) chatFileRef.current.value = "";
+        },
     });
 
     const uploadMut = useMutation({
@@ -130,12 +195,19 @@ export default function PortalProjects() {
                             >
                                 <div className="flex justify-between items-start mb-2">
                                     <h3 className="font-bold text-secondary text-lg leading-tight">{p.title}</h3>
-                                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${p.status === "active" ? "bg-emerald-100 text-emerald-700" :
-                                        p.status === "completed" ? "bg-blue-100 text-blue-700" :
-                                            "bg-slate-100 text-slate-600"
-                                        }`}>
-                                        {p.status}
-                                    </span>
+                                    <div className="flex flex-col items-end gap-1">
+                                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${p.status === "active" ? "bg-emerald-100 text-emerald-700" :
+                                            p.status === "completed" ? "bg-blue-100 text-blue-700" :
+                                                "bg-slate-100 text-slate-600"
+                                            }`}>
+                                            {p.status}
+                                        </span>
+                                        {p.unreadCount > 0 && (
+                                            <span className="bg-red-500 text-white text-[10px] h-4 w-4 flex items-center justify-center rounded-full animate-bounce">
+                                                {p.unreadCount}
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                                 <div className="w-full bg-slate-100 rounded-full h-1.5 mb-2">
                                     <div className="bg-primary h-1.5 rounded-full transition-all" style={{ width: `${p.progress || 0}%` }} />
@@ -195,7 +267,7 @@ export default function PortalProjects() {
                                         <div className="text-center py-12 px-4 rounded-xl border border-dashed bg-slate-50">
                                             <File className="w-8 h-8 mx-auto text-slate-300 mb-3" />
                                             <p className="text-sm text-muted-foreground">No files shared yet.</p>
-                                            <Button variant="link" onClick={() => setIsUploadOpen(true)}>Upload your first file</Button>
+                                            <Button variant="ghost" className="text-primary hover:underline" onClick={() => setIsUploadOpen(true)}>Upload your first file</Button>
                                         </div>
                                     ) : (
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -220,51 +292,101 @@ export default function PortalProjects() {
                                 <TabsContent value="messages">
                                     <div className="flex flex-col gap-3">
                                         {/* Messages area */}
-                                        <div className="h-52 overflow-y-auto flex flex-col gap-3 p-4 bg-slate-50 rounded-xl border border-border/50">
-                                            {comments.length === 0 ? (
+                                        <div className="h-[400px] overflow-y-auto flex flex-col gap-4 p-4 bg-slate-50 rounded-xl border border-border/50">
+                                            {messages.length === 0 ? (
                                                 <div className="flex flex-col items-center justify-center h-full text-center">
                                                     <MessageSquare className="w-10 h-10 text-slate-300 mb-3" />
                                                     <p className="text-sm font-semibold text-slate-500">No messages yet</p>
                                                     <p className="text-xs text-muted-foreground mt-1">Send a message below to start a conversation with the team.</p>
                                                 </div>
                                             ) : (
-                                                comments.map(c => {
-                                                    const isMe = c.userId !== 1;
-                                                    return (
-                                                        <div key={c.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
-                                                            <div className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm shadow-sm ${isMe ? "bg-primary text-white rounded-tr-sm" : "bg-white border text-secondary rounded-tl-sm"}`}>
-                                                                <p className="leading-relaxed">{c.content}</p>
-                                                                <span className={`text-[10px] mt-1 block font-mono ${isMe ? "text-white/60 text-right" : "text-muted-foreground"}`}>
-                                                                    {new Date(c.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                                                                </span>
+                                                <>
+                                                    {messages.map(m => {
+                                                        const isMe = m.senderRole === "client";
+                                                        return (
+                                                            <div key={m.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
+                                                                <div className={`max-w-[80%] space-y-2`}>
+                                                                    <div className={`px-4 py-2.5 rounded-2xl text-sm shadow-sm ${isMe ? "bg-primary text-white rounded-tr-sm" : "bg-white border text-secondary rounded-tl-sm"}`}>
+                                                                        {m.content && <p className="leading-relaxed whitespace-pre-wrap">{m.content}</p>}
+
+                                                                        {m.attachments && m.attachments.length > 0 && (
+                                                                            <div className="mt-2 space-y-1">
+                                                                                {m.attachments.map((a: any) => (
+                                                                                    <a key={a.id} href={a.fileUrl} target="_blank" rel="noreferrer"
+                                                                                        className={`flex items-center gap-2 p-2 rounded-lg text-xs border ${isMe ? "bg-white/10 border-white/20 hover:bg-white/20" : "bg-slate-50 border-slate-200 hover:bg-slate-100"}`}>
+                                                                                        <Paperclip className="w-3 h-3" />
+                                                                                        <span className="truncate max-w-[150px]">{a.fileName}</span>
+                                                                                        <Download className="w-3 h-3 ml-auto opacity-60" />
+                                                                                    </a>
+                                                                                ))}
+                                                                            </div>
+                                                                        )}
+
+                                                                        <span className={`text-[10px] mt-1 block font-mono ${isMe ? "text-white/60 text-right" : "text-muted-foreground"}`}>
+                                                                            {new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                    {typingUser && (
+                                                        <div className="flex justify-start">
+                                                            <div className="bg-slate-200/50 px-3 py-1.5 rounded-full text-[10px] text-muted-foreground animate-pulse flex items-center gap-2">
+                                                                <div className="flex gap-1">
+                                                                    <div className="w-1 h-1 bg-slate-400 rounded-full animate-bounce" />
+                                                                    <div className="w-1 h-1 bg-slate-400 rounded-full animate-bounce [animation-delay:0.2s]" />
+                                                                    <div className="w-1 h-1 bg-slate-400 rounded-full animate-bounce [animation-delay:0.4s]" />
+                                                                </div>
+                                                                Admin is typing...
                                                             </div>
                                                         </div>
-                                                    );
-                                                })
+                                                    )}
+                                                </>
                                             )}
                                         </div>
-                                        {/* Input bar - always visible */}
-                                        <div className="flex gap-2">
-                                            <Input
-                                                placeholder="Type a message to the team..."
-                                                value={commentContent}
-                                                onChange={e => setCommentContent(e.target.value)}
-                                                onKeyDown={e => {
-                                                    if (e.key === "Enter" && !e.shiftKey && commentContent.trim()) {
-                                                        e.preventDefault();
-                                                        createComment.mutate(commentContent);
-                                                    }
-                                                }}
-                                                className="flex-1"
-                                            />
-                                            <Button
-                                                onClick={() => { if (commentContent.trim()) createComment.mutate(commentContent); }}
-                                                disabled={createComment.isPending || !commentContent.trim()}
-                                                className="gap-2 px-4"
-                                            >
-                                                <Send className="w-4 h-4" />
-                                                Send
-                                            </Button>
+                                        {/* Input bar */}
+                                        <div className="space-y-2">
+                                            <div className="flex gap-2">
+                                                <div className="relative flex-1">
+                                                    <Input
+                                                        placeholder="Type a message to the team..."
+                                                        value={commentContent}
+                                                        onChange={e => {
+                                                            setCommentContent(e.target.value);
+                                                            handleTyping();
+                                                        }}
+                                                        onKeyDown={e => {
+                                                            if (e.key === "Enter" && !e.shiftKey && commentContent.trim()) {
+                                                                e.preventDefault();
+                                                                sendMessageMut.mutate({ content: commentContent });
+                                                            }
+                                                        }}
+                                                        className="pr-10"
+                                                    />
+                                                    <button
+                                                        onClick={() => chatFileRef.current?.click()}
+                                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary transition-colors"
+                                                    >
+                                                        <Paperclip className="w-4 h-4" />
+                                                    </button>
+                                                    <input type="file" ref={chatFileRef} className="hidden" onChange={(e) => {
+                                                        const file = e.target.files?.[0];
+                                                        if (file) {
+                                                            sendMessageMut.mutate({ content: commentContent, file });
+                                                        }
+                                                    }} />
+                                                </div>
+                                                <Button
+                                                    onClick={() => { if (commentContent.trim()) sendMessageMut.mutate({ content: commentContent }); }}
+                                                    disabled={sendMessageMut.isPending || (!commentContent.trim() && !chatFileRef.current?.files?.length)}
+                                                    className="gap-2 px-6"
+                                                >
+                                                    {sendMessageMut.isPending ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Send className="w-4 h-4" />}
+                                                    Send
+                                                </Button>
+                                            </div>
+                                            <p className="text-[10px] text-muted-foreground text-center italic">Professional real-time communication powered by NexaSync Messaging™</p>
                                         </div>
                                     </div>
                                 </TabsContent>
@@ -275,7 +397,7 @@ export default function PortalProjects() {
                                         <div className="text-center py-12 px-4 rounded-xl border border-dashed bg-slate-50">
                                             <ListChecks className="w-8 h-8 mx-auto text-slate-300 mb-3" />
                                             <p className="text-sm text-muted-foreground">No update requests found.</p>
-                                            <Button variant="link" onClick={() => setIsRequestOpen(true)}>Submit a new request for features or edits</Button>
+                                            <Button variant="ghost" className="text-primary hover:underline" onClick={() => setIsRequestOpen(true)}>Submit a new request for features or edits</Button>
                                         </div>
                                     ) : (
                                         <div className="space-y-4">
