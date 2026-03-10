@@ -3,7 +3,7 @@ import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import {
     LayoutDashboard, Settings, Users, BarChart3, FolderKanban,
-    MessageSquare, FileText, LogOut, Cpu, ChevronRight, Quote, Phone
+    MessageSquare, FileText, LogOut, Cpu, ChevronRight, Quote, Phone, MessagesSquare, CreditCard
 } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -13,10 +13,12 @@ const navItems = [
     { icon: Users, label: "Customers", href: "/admin/customers" },
     { icon: FolderKanban, label: "Projects", href: "/admin/projects" },
     { icon: BarChart3, label: "Analytics", href: "/admin/analytics" },
-    { icon: MessageSquare, label: "Messages", href: "/admin/messages" },
+    { icon: MessagesSquare, label: "Conversations", href: "/admin/conversations" },
+    { icon: MessageSquare, label: "Contact Msgs", href: "/admin/messages" },
     { icon: Phone, label: "Leads", href: "/admin/leads" },
     { icon: Quote, label: "Quotes", href: "/admin/quotes" },
     { icon: FileText, label: "Invoices", href: "/admin/invoices" },
+    { icon: CreditCard, label: "B2B Payments", href: "/admin/payments" },
 ];
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {

@@ -21,6 +21,8 @@ import AdminMessages from "@/pages/admin/Messages";
 import AdminQuotes from "@/pages/admin/Quotes";
 import AdminInvoices from "@/pages/admin/Invoices";
 import AdminLeads from "@/pages/admin/Leads";
+import AdminConversations from "@/pages/admin/Conversations";
+import AdminPayments from "@/pages/admin/Payments";
 
 // Portal pages
 import PortalDashboard from "@/pages/portal/Dashboard";
@@ -89,6 +91,12 @@ function Router() {
         </Route>
         <Route path="/admin/invoices">
           <AdminGuard><AdminInvoices /></AdminGuard>
+        </Route>
+        <Route path="/admin/conversations">
+          <AdminGuard><AdminConversations /></AdminGuard>
+        </Route>
+        <Route path="/admin/payments">
+          <AdminGuard><AdminPayments /></AdminGuard>
         </Route>
 
         {/* Client Portal */}
