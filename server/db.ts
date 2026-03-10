@@ -16,8 +16,13 @@ const dbUri = process.env.DATABASE_URL || "mysql://user:password@localhost:3306/
 const maskedUri = dbUri.replace(/\/\/.*:.*@/, "//***:***@");
 console.log(`[db] Connecting to database at ${maskedUri}`);
 
+// TiDB Cloud Serverless REQUIRES SSL. We enforce it here to be safe.
 const poolConnection = mysql.createPool({
   uri: dbUri,
+  ssl: {
+    rejectUnauthorized: true,
+    minVersion: 'TLSv1.2'
+  }
 });
 
 export const db = drizzle(poolConnection, { schema, mode: "default" });
