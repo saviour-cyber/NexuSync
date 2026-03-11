@@ -121,6 +121,17 @@ export const paymentLogs = mysqlTable("payment_logs", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// ─── Bank Payment Receipts ───────────────────────────────────────────────────
+export const bankPaymentReceipts = mysqlTable("bank_payment_receipts", {
+  id: int("id").primaryKey().autoincrement(),
+  paymentLogId: int("payment_log_id").references(() => paymentLogs.id),
+  invoiceId: int("invoice_id").notNull().references(() => invoices.id),
+  fileUrl: text("file_url").notNull(),
+  originalName: varchar("original_name", { length: 255 }).notNull(),
+  verified: boolean("verified").default(false),
+  uploadedAt: timestamp("uploaded_at").defaultNow(),
+});
+
 // ─── Project Files ────────────────────────────────────────────────────────────
 export const projectFiles = mysqlTable("project_files", {
   id: int("id").primaryKey().autoincrement(),
@@ -193,6 +204,7 @@ export const insertContactMessageSchema = createInsertSchema(contactMessages).om
 export const insertProjectCommentSchema = createInsertSchema(projectComments).omit({ id: true, createdAt: true });
 export const insertInvoiceSchema = createInsertSchema(invoices).omit({ id: true, createdAt: true, paidAt: true });
 export const insertPaymentLogSchema = createInsertSchema(paymentLogs).omit({ id: true, createdAt: true });
+export const insertBankPaymentReceiptSchema = createInsertSchema(bankPaymentReceipts).omit({ id: true, uploadedAt: true });
 export const insertProjectFileSchema = createInsertSchema(projectFiles).omit({ id: true, createdAt: true });
 export const insertUpdateRequestSchema = createInsertSchema(updateRequests).omit({ id: true, createdAt: true, status: true, adminReply: true });
 export const insertWhatsappLeadSchema = createInsertSchema(whatsappLeads).omit({ id: true, createdAt: true, status: true });
@@ -240,6 +252,9 @@ export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
 
 export type PaymentLog = typeof paymentLogs.$inferSelect;
 export type InsertPaymentLog = z.infer<typeof insertPaymentLogSchema>;
+
+export type BankPaymentReceipt = typeof bankPaymentReceipts.$inferSelect;
+export type InsertBankPaymentReceipt = z.infer<typeof insertBankPaymentReceiptSchema>;
 
 export type ProjectFile = typeof projectFiles.$inferSelect;
 export type InsertProjectFile = z.infer<typeof insertProjectFileSchema>;

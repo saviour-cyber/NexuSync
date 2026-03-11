@@ -598,38 +598,189 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // Admin Bank Transfer Verification
+
+  // Admin Bank Transfer Verification (manual, no receipt)
   app.post("/api/admin/payments/bank/verify", requireAdmin, async (req, res) => {
     try {
       const { invoiceId, reference, amount } = req.body;
       const invoice = await storage.getInvoiceById(parseInt(invoiceId));
-
       if (!invoice) return res.status(404).json({ message: "Invoice not found" });
       if (invoice.status === "paid") return res.status(400).json({ message: "Invoice already paid" });
-
-      // Mark as paid
-      await storage.updateInvoice(invoice.id, { 
-        status: "paid",
-        paymentMethod: "bank",
-        paymentReference: reference,
-        paidAt: new Date()
-      });
-
-      // Log the verified payment
-      await storage.createPaymentLog({
-        invoiceId: invoice.id,
-        method: "bank",
-        status: "success",
-        transactionId: reference,
-        amount: amount || invoice.amount
-      });
-
+      await storage.updateInvoice(invoice.id, { status: "paid", paymentMethod: "bank", paymentReference: reference, paidAt: new Date() });
+      await storage.createPaymentLog({ invoiceId: invoice.id, method: "bank", status: "success", transactionId: reference, amount: amount || invoice.amount });
       res.json({ message: "Bank payment verified and invoice marked as paid" });
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: "Failed to verify bank payment" });
     }
   });
+
+  // CLIENT: Upload bank transfer receipt
+  app.post("/api/payments/bank/receipt", requireAuth, upload.single("receipt"), async (req, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ message: "No receipt file provided" });
+      const { invoiceId } = req.body;
+      if (!invoiceId) return res.status(400).json({ message: "invoiceId is required" });
+
+      const invoice = await storage.getInvoiceById(parseInt(invoiceId));
+      if (!invoice) return res.status(404).json({ message: "Invoice not found" });
+
+      // Log a pending bank payment
+      const log = await storage.createPaymentLog({
+        invoiceId: invoice.id,
+        method: "bank",
+        status: "pending",
+        transactionId: null,
+        amount: invoice.amount
+      });
+
+      // Store receipt
+      const receipt = await storage.createBankReceipt({
+        invoiceId: invoice.id,
+        paymentLogId: log.id,
+        fileUrl: `/uploads/${req.file.filename}`,
+        originalName: req.file.originalname,
+        verified: false
+      });
+
+      // Mark invoice as pending (awaiting admin verification)
+      await storage.updateInvoice(invoice.id, { status: "pending", paymentMethod: "bank" });
+
+      res.status(201).json({ receipt, log });
+    } catch (err) {
+      console.error("Receipt upload error:", err);
+      res.status(500).json({ message: "Failed to upload receipt" });
+    }
+  });
+
+  // ADMIN: Get receipts for an invoice
+  app.get("/api/admin/invoices/:id/receipts", requireAdmin, async (req, res) => {
+    try {
+      const receipts = await storage.getBankReceiptsByInvoice(parseInt(req.params.id));
+      res.json(receipts);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to fetch receipts" });
+    }
+  });
+
+  // ADMIN: Verify a bank receipt and mark invoice paid
+  app.post("/api/admin/invoices/:id/receipts/:receiptId/verify", requireAdmin, async (req, res) => {
+    try {
+      const invoiceId = parseInt(req.params.id);
+      const receiptId = parseInt(req.params.receiptId);
+      const invoice = await storage.getInvoiceById(invoiceId);
+      if (!invoice) return res.status(404).json({ message: "Invoice not found" });
+
+      await storage.verifyBankReceipt(receiptId);
+      await storage.updateInvoice(invoiceId, { status: "paid", paidAt: new Date() });
+      res.json({ message: "Receipt verified and invoice marked as paid" });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to verify receipt" });
+    }
+  });
+
+  // PORTAL: Get invoices for the logged-in client
+  app.get("/api/portal/invoices", requireAuth, async (req, res) => {
+    const clientId = req.session.userId!;
+    const allInvoices = await storage.getInvoices(clientId);
+    res.json(allInvoices);
+  });
+
+  // Real M-Pesa Daraja STK Push
+  app.post("/api/payments/mpesa/stkpush", requireAuth, async (req, res) => {
+    try {
+      const { invoiceId, phone } = req.body;
+      if (!invoiceId || !phone) return res.status(400).json({ message: "invoiceId and phone are required" });
+
+      const invoice = await storage.getInvoiceById(parseInt(invoiceId));
+      if (!invoice) return res.status(404).json({ message: "Invoice not found" });
+      if (invoice.status === "paid") return res.status(400).json({ message: "Invoice already paid" });
+
+      const shortcode = process.env.MPESA_SHORTCODE;
+      const passkey = process.env.MPESA_PASSKEY;
+      const consumerKey = process.env.MPESA_CONSUMER_KEY;
+      const consumerSecret = process.env.MPESA_CONSUMER_SECRET;
+      const apiUrl = process.env.MPESA_API_URL || "https://sandbox.safaricom.co.ke";
+      const callbackUrl = `${process.env.API_URL || "https://nexasync.onrender.com"}/api/mpesa/callback`;
+
+      // Fallback to mock if no Daraja credentials
+      if (!shortcode || !passkey || !consumerKey || !consumerSecret) {
+        const mockTxnId = `MPESA_${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
+        await storage.createPaymentLog({ invoiceId: invoice.id, method: "mpesa", status: "pending", transactionId: mockTxnId, amount: invoice.amount });
+        await storage.updateInvoice(invoice.id, { status: "pending", paymentMethod: "mpesa", paymentReference: mockTxnId });
+        return res.json({ message: "STK Push simulated (no Daraja credentials)", transactionId: mockTxnId, status: "pending" });
+      }
+
+      // Get OAuth token
+      const tokenRes = await fetch(`${apiUrl}/oauth/v1/generate?grant_type=client_credentials`, {
+        headers: { Authorization: `Basic ${Buffer.from(`${consumerKey}:${consumerSecret}`).toString("base64")}` }
+      });
+      const { access_token } = await tokenRes.json() as any;
+
+      // Build STK push request
+      const timestamp = new Date().toISOString().replace(/[-:T.Z]/g, "").slice(0, 14);
+      const password = Buffer.from(`${shortcode}${passkey}${timestamp}`).toString("base64");
+      const normalizedPhone = phone.startsWith("0") ? `254${phone.slice(1)}` : phone;
+
+      const stkRes = await fetch(`${apiUrl}/mpesa/stkpush/v1/processrequest`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          BusinessShortCode: shortcode,
+          Password: password,
+          Timestamp: timestamp,
+          TransactionType: "CustomerPayBillOnline",
+          Amount: invoice.amount,
+          PartyA: normalizedPhone,
+          PartyB: shortcode,
+          PhoneNumber: normalizedPhone,
+          CallBackURL: callbackUrl,
+          AccountReference: `INV-${invoice.id}`,
+          TransactionDesc: `Payment for Invoice #${invoice.id}`
+        })
+      });
+      const stkData = await stkRes.json() as any;
+
+      const checkoutId = stkData.CheckoutRequestID;
+      await storage.createPaymentLog({ invoiceId: invoice.id, method: "mpesa", status: "pending", transactionId: checkoutId, amount: invoice.amount });
+      await storage.updateInvoice(invoice.id, { status: "pending", paymentMethod: "mpesa", paymentReference: checkoutId });
+
+      res.json({ message: "STK Push sent", checkoutRequestId: checkoutId, status: "pending" });
+    } catch (err) {
+      console.error("STK Push error:", err);
+      res.status(500).json({ message: "Failed to initiate M-Pesa payment" });
+    }
+  });
+
+  // M-Pesa Daraja Callback
+  app.post("/api/mpesa/callback", async (req, res) => {
+    try {
+      const result = req.body?.Body?.stkCallback;
+      if (!result) return res.sendStatus(200);
+
+      const checkoutId = result.CheckoutRequestID;
+      const allInvoices = await storage.getInvoices();
+      const invoice = allInvoices.find(i => i.paymentReference === checkoutId);
+      if (!invoice) return res.sendStatus(200);
+
+      if (result.ResultCode === 0) {
+        const items = result.CallbackMetadata?.Item || [];
+        const txnId = items.find((i: any) => i.Name === "MpesaReceiptNumber")?.Value || checkoutId;
+        const amount = items.find((i: any) => i.Name === "Amount")?.Value || invoice.amount;
+        await storage.updateInvoice(invoice.id, { status: "paid", paidAt: new Date(), paymentReference: txnId });
+        await storage.createPaymentLog({ invoiceId: invoice.id, method: "mpesa", status: "success", transactionId: txnId, amount });
+      } else {
+        await storage.updateInvoice(invoice.id, { status: "unpaid" });
+        await storage.createPaymentLog({ invoiceId: invoice.id, method: "mpesa", status: "failed", transactionId: checkoutId, amount: invoice.amount });
+      }
+      res.sendStatus(200);
+    } catch (err) {
+      console.error("M-Pesa callback error:", err);
+      res.sendStatus(200);
+    }
+  });
+
+
 
   // ─── Messaging (Refactored) ────────────────────────────────────────────────
   app.get("/api/projects/:projectId/messages", requireAuth, async (req, res) => {

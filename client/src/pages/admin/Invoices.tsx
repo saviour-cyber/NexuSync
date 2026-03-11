@@ -151,11 +151,26 @@ export default function AdminInvoices() {
                                                 <SelectTrigger className="h-7 text-xs w-28"><SelectValue /></SelectTrigger>
                                                 <SelectContent>{["unpaid", "pending", "paid", "overdue", "failed"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                                             </Select>
-                                            {inv.paymentMethod === "bank" && inv.status !== "paid" && (
-                                                <Button size="sm" variant="outline" className="h-7 text-xs bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100"
-                                                    onClick={() => verifyBankMutation.mutate({ invoiceId: inv.id, reference: inv.paymentReference || "MANUAL_VERIFY", amount: inv.amount })}
-                                                    disabled={verifyBankMutation.isPending}>
-                                                    <CheckCircle className="w-3 h-3 mr-1" /> Verify
+                                            
+                                            {inv.paymentMethod === "bank" && inv.status === "pending" && (
+                                                <Button size="sm" variant="outline" className="h-7 text-xs bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                                                    onClick={async () => {
+                                                        try {
+                                                            const res = await fetch(`/api/admin/invoices/${inv.id}/receipts`);
+                                                            const receipts = await res.json();
+                                                            if (receipts && receipts.length > 0) {
+                                                                // Fast-forward to marking it paid if we found a receipt automatically for simplicity here
+                                                                const latest = receipts[receipts.length - 1];
+                                                                if(confirm(`View receipt at: ${latest.fileUrl}\nVerify and mark paid?`)) {
+                                                                    await fetch(`/api/admin/invoices/${inv.id}/receipts/${latest.id}/verify`, { method: "POST" });
+                                                                    queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
+                                                                }
+                                                            } else {
+                                                                alert("No receipts found for this invoice.");
+                                                            }
+                                                        } catch(e) { console.error(e); }
+                                                    }}>
+                                                    <CheckCircle className="w-3 h-3 mr-1" /> View/Verify Receipt
                                                 </Button>
                                             )}
                                         </td>

@@ -19,7 +19,8 @@ import {
   type Attachment, type InsertAttachment,
   type CreateServiceRequest, type CreateContactMessageRequest,
   type ServiceResponse, type ContactMessageResponse,
-  paymentLogs, type PaymentLog, type InsertPaymentLog
+  paymentLogs, type PaymentLog, type InsertPaymentLog,
+  bankPaymentReceipts, type BankPaymentReceipt, type InsertBankPaymentReceipt
 } from "@shared/schema";
 import { conversations, messages, attachments } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
@@ -91,6 +92,10 @@ export interface IStorage {
   getPaymentLogsByInvoice(invoiceId: number): Promise<PaymentLog[]>;
   createPaymentLog(log: InsertPaymentLog): Promise<PaymentLog>;
 
+  createBankReceipt(receipt: InsertBankPaymentReceipt): Promise<BankPaymentReceipt>;
+  getBankReceiptsByInvoice(invoiceId: number): Promise<BankPaymentReceipt[]>;
+  verifyBankReceipt(id: number): Promise<void>;
+
   // Project Files
   getFilesByProject(projectId: number): Promise<ProjectFile[]>;
   createFile(file: InsertProjectFile): Promise<ProjectFile>;
@@ -132,6 +137,7 @@ export class MemStorage implements IStorage {
   private _comments: ProjectComment[] = [];
   private _invoices: Invoice[] = [];
   private _paymentLogs: PaymentLog[] = [];
+  private _bankReceipts: BankPaymentReceipt[] = [];
   private _id = 1;
   private nextId() { return this._id++; }
 
@@ -330,6 +336,28 @@ export class MemStorage implements IStorage {
     };
     this._paymentLogs.push(item);
     return item;
+  }
+
+  async createBankReceipt(receipt: InsertBankPaymentReceipt): Promise<BankPaymentReceipt> {
+    const item: BankPaymentReceipt = {
+      ...receipt, id: this.nextId(), uploadedAt: new Date(), verified: false,
+      paymentLogId: receipt.paymentLogId ?? null,
+    };
+    this._bankReceipts.push(item);
+    return item;
+  }
+  async getBankReceiptsByInvoice(invoiceId: number): Promise<BankPaymentReceipt[]> {
+    return this._bankReceipts.filter(r => r.invoiceId === invoiceId);
+  }
+  async verifyBankReceipt(id: number): Promise<void> {
+    const i = this._bankReceipts.findIndex(r => r.id === id);
+    if (i !== -1) {
+      this._bankReceipts[i].verified = true;
+      if (this._bankReceipts[i].paymentLogId) {
+         const plog = this._paymentLogs.findIndex(p => p.id === this._bankReceipts[i].paymentLogId);
+         if (plog !== -1) this._paymentLogs[plog].status = "success";
+      }
+    }
   }
 
   // ── Files
@@ -600,6 +628,24 @@ export class DatabaseStorage implements IStorage {
     const [info] = await db.insert(paymentLogs).values(log);
     const [res] = await db.select().from(paymentLogs).where(eq(paymentLogs.id, info.insertId));
     return res;
+  }
+
+  async createBankReceipt(receipt: InsertBankPaymentReceipt) {
+    const [info] = await db.insert(bankPaymentReceipts).values(receipt);
+    const [res] = await db.select().from(bankPaymentReceipts).where(eq(bankPaymentReceipts.id, info.insertId));
+    return res;
+  }
+  async getBankReceiptsByInvoice(invoiceId: number) {
+    return await db.select().from(bankPaymentReceipts).where(eq(bankPaymentReceipts.invoiceId, invoiceId));
+  }
+  async verifyBankReceipt(id: number) {
+    await db.update(bankPaymentReceipts).set({ verified: true }).where(eq(bankPaymentReceipts.id, id));
+    
+    // Also mark the associated payment log as success
+    const [receipt] = await db.select().from(bankPaymentReceipts).where(eq(bankPaymentReceipts.id, id));
+    if (receipt && receipt.paymentLogId) {
+      await db.update(paymentLogs).set({ status: "success" }).where(eq(paymentLogs.id, receipt.paymentLogId));
+    }
   }
 
   // ── Files
