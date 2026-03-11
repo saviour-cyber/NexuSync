@@ -19,6 +19,7 @@ const navItems = [
     { icon: Quote, label: "Quotes", href: "/admin/quotes" },
     { icon: FileText, label: "Invoices", href: "/admin/invoices" },
     { icon: CreditCard, label: "B2B Payments", href: "/admin/payments" },
+    { icon: Settings, label: "Gateways", href: "/admin/settings/payments" },
 ];
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {

@@ -679,6 +679,48 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ADMIN: Get Payment Gateway Settings
+  app.get("/api/admin/settings/payment", requireAdmin, async (req, res) => {
+    try {
+      const allSettings = await storage.getAllSettings();
+      // Only return the relevant payment settings
+      res.json({
+        mpesa_shortcode: allSettings["mpesa_shortcode"] || "",
+        mpesa_passkey: allSettings["mpesa_passkey"] || "",
+        mpesa_consumer_key: allSettings["mpesa_consumer_key"] || "",
+        mpesa_consumer_secret: allSettings["mpesa_consumer_secret"] || "",
+        bank_details: allSettings["bank_details"] || "",
+      });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to fetch settings" });
+    }
+  });
+
+  // ADMIN: Update Payment Gateway Settings
+  app.post("/api/admin/settings/payment", requireAdmin, async (req, res) => {
+    try {
+      const keys = ["mpesa_shortcode", "mpesa_passkey", "mpesa_consumer_key", "mpesa_consumer_secret", "bank_details"];
+      for (const key of keys) {
+        if (req.body[key] !== undefined) {
+           await storage.setSetting(key, req.body[key]);
+        }
+      }
+      res.json({ message: "Payment settings updated successfully" });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to update settings" });
+    }
+  });
+
+  // PORTAL: Get Public Bank Details
+  app.get("/api/portal/settings/bank", requireAuth, async (req, res) => {
+    try {
+      const bankDetails = await storage.getSetting("bank_details");
+      res.json({ bank_details: bankDetails || "" });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to fetch bank details" });
+    }
+  });
+
   // PORTAL: Get invoices for the logged-in client
   app.get("/api/portal/invoices", requireAuth, async (req, res) => {
     const clientId = req.session.userId!;
@@ -696,10 +738,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!invoice) return res.status(404).json({ message: "Invoice not found" });
       if (invoice.status === "paid") return res.status(400).json({ message: "Invoice already paid" });
 
-      const shortcode = process.env.MPESA_SHORTCODE;
-      const passkey = process.env.MPESA_PASSKEY;
-      const consumerKey = process.env.MPESA_CONSUMER_KEY;
-      const consumerSecret = process.env.MPESA_CONSUMER_SECRET;
+      // Fetch dynamic settings from DB, fallback to env
+      const dbShortcode = await storage.getSetting("mpesa_shortcode");
+      const dbPasskey = await storage.getSetting("mpesa_passkey");
+      const dbConsumerKey = await storage.getSetting("mpesa_consumer_key");
+      const dbConsumerSecret = await storage.getSetting("mpesa_consumer_secret");
+
+      const shortcode = dbShortcode || process.env.MPESA_SHORTCODE;
+      const passkey = dbPasskey || process.env.MPESA_PASSKEY;
+      const consumerKey = dbConsumerKey || process.env.MPESA_CONSUMER_KEY;
+      const consumerSecret = dbConsumerSecret || process.env.MPESA_CONSUMER_SECRET;
       const apiUrl = process.env.MPESA_API_URL || "https://sandbox.safaricom.co.ke";
       const callbackUrl = `${process.env.API_URL || "https://nexasync.onrender.com"}/api/mpesa/callback`;
 

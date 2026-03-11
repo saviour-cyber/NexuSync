@@ -9,6 +9,25 @@ import { FileText, Phone, Landmark, UploadCloud, CheckCircle2, Clock, Ban } from
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
+function DynamicBankDetails({ invoiceId }: { invoiceId?: number }) {
+    const { data, isLoading } = useQuery({ queryKey: ["/api/portal/settings/bank"] });
+    const settingsData = data as any;
+    const details = settingsData?.bank_details || "Equity Bank\nNexaSync Ltd\n123456789012";
+    const lines = details.split('\n').filter((l: string) => l.trim());
+
+    if (isLoading) return <div className="text-slate-500 text-sm animate-pulse">Loading bank details...</div>;
+
+    return (
+        <div className="flex flex-col gap-2 text-sm whitespace-pre-wrap">
+            <div className="font-medium text-slate-700">{details}</div>
+            <div className="mt-2 text-slate-500 font-medium">Reference</div>
+            <div className="font-bold text-blue-600 border-t border-slate-200/60 pt-2">
+                INV-{String(invoiceId || 0).padStart(4, "0")}
+            </div>
+        </div>
+    );
+}
+
 export default function PortalInvoices() {
     const { toast } = useToast();
     const qc = useQueryClient();
@@ -212,19 +231,7 @@ export default function PortalInvoices() {
 
                     <div className="space-y-6">
                         <div className="bg-slate-50 rounded-xl p-5 border border-slate-200">
-                            <div className="grid grid-cols-3 gap-y-3 text-sm">
-                                <div className="text-slate-500 font-medium">Bank</div>
-                                <div className="col-span-2 font-semibold text-slate-900">Equity Bank</div>
-                                
-                                <div className="text-slate-500 font-medium">Account</div>
-                                <div className="col-span-2 font-semibold text-slate-900">NexaSync Ltd</div>
-                                
-                                <div className="text-slate-500 font-medium">Number</div>
-                                <div className="col-span-2 font-semibold text-slate-900 font-mono">123456789012</div>
-                                
-                                <div className="text-slate-500 font-medium">Reference</div>
-                                <div className="col-span-2 font-bold text-blue-600">INV-{String(selectedInvoice?.id).padStart(4, "0")}</div>
-                            </div>
+                            <DynamicBankDetails invoiceId={selectedInvoice?.id} />
                         </div>
 
                         <div className="space-y-3">

@@ -132,6 +132,12 @@ export const bankPaymentReceipts = mysqlTable("bank_payment_receipts", {
   uploadedAt: timestamp("uploaded_at").defaultNow(),
 });
 
+export const settings = mysqlTable("settings", {
+  key: varchar("key", { length: 100 }).primaryKey(),
+  value: text("value"),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow()
+});
+
 // ─── Project Files ────────────────────────────────────────────────────────────
 export const projectFiles = mysqlTable("project_files", {
   id: int("id").primaryKey().autoincrement(),
@@ -259,10 +265,14 @@ export type InsertBankPaymentReceipt = z.infer<typeof insertBankPaymentReceiptSc
 export type ProjectFile = typeof projectFiles.$inferSelect;
 export type InsertProjectFile = z.infer<typeof insertProjectFileSchema>;
 
-export type UpdateRequest = typeof updateRequests.$inferSelect;
 export type InsertUpdateRequest = z.infer<typeof insertUpdateRequestSchema>;
 
 export type WhatsappLead = typeof whatsappLeads.$inferSelect;
+export type InsertWhatsappLead = z.infer<typeof insertWhatsappLeadSchema>;
+
+export const insertSettingSchema = createInsertSchema(settings);
+export type Setting = typeof settings.$inferSelect;
+export type InsertSetting = z.infer<typeof insertSettingSchema>;
 export type InsertWhatsappLead = z.infer<typeof insertWhatsappLeadSchema>;
 
 export type Conversation = typeof conversations.$inferSelect;

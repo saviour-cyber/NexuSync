@@ -23,6 +23,7 @@ import AdminInvoices from "@/pages/admin/Invoices";
 import AdminLeads from "@/pages/admin/Leads";
 import AdminConversations from "@/pages/admin/Conversations";
 import AdminPayments from "@/pages/admin/Payments";
+import PaymentSettings from "@/pages/admin/PaymentSettings";
 
 // Portal pages
 import PortalDashboard from "@/pages/portal/Dashboard";
@@ -97,6 +98,9 @@ function Router() {
         </Route>
         <Route path="/admin/payments">
           <AdminGuard><AdminPayments /></AdminGuard>
+        </Route>
+        <Route path="/admin/settings/payments">
+          <AdminGuard><PaymentSettings /></AdminGuard>
         </Route>
 
         {/* Client Portal */}

@@ -121,6 +121,11 @@ export interface IStorage {
   updateConversationStatus(id: number, data: { adminLastReadAt?: Date; clientLastReadAt?: Date }): Promise<void>;
   migrateCommentsToMessages(): Promise<void>;
 
+  // Settings
+  getSetting(key: string): Promise<string | null>;
+  setSetting(key: string, value: string): Promise<void>;
+  getAllSettings(): Promise<Record<string, string>>;
+
   // Analytics
   getAnalytics(): Promise<any>;
 }
@@ -471,6 +476,18 @@ export class MemStorage implements IStorage {
   async migrateCommentsToMessages(): Promise<void> {
     // Migration logic for MemStorage if needed
   }
+
+  // ── Settings Implementation in MemStorage
+  private _settings: Record<string, string> = {};
+  async getSetting(key: string): Promise<string | null> {
+    return this._settings[key] || null;
+  }
+  async setSetting(key: string, value: string): Promise<void> {
+    this._settings[key] = value;
+  }
+  async getAllSettings(): Promise<Record<string, string>> {
+     return { ...this._settings };
+  }
 }
 
 // ─── DatabaseStorage ──────────────────────────────────────────────────────────
@@ -783,6 +800,33 @@ export class DatabaseStorage implements IStorage {
         });
       }
     }
+  }
+
+  // ── Settings Implementation in DatabaseStorage
+  async getSetting(key: string): Promise<string | null> {
+    const { settings } = await import("@shared/schema");
+    const [res] = await db.select().from(settings).where(eq(settings.key, key));
+    return res ? res.value : null;
+  }
+  
+  async setSetting(key: string, value: string): Promise<void> {
+    const { settings } = await import("@shared/schema");
+    const [existing] = await db.select().from(settings).where(eq(settings.key, key));
+    if (existing) {
+      await db.update(settings).set({ value, updatedAt: new Date() }).where(eq(settings.key, key));
+    } else {
+      await db.insert(settings).values({ key, value });
+    }
+  }
+
+  async getAllSettings(): Promise<Record<string, string>> {
+    const { settings } = await import("@shared/schema");
+    const all = await db.select().from(settings);
+    const result: Record<string, string> = {};
+    for (const s of all) {
+       if (s.value) result[s.key] = s.value;
+    }
+    return result;
   }
 }
 
