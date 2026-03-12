@@ -25,6 +25,9 @@ export default function Login() {
     const [companyName, setCompanyName] = useState("");
     const [phone, setPhone] = useState("");
     const [servicesInterested, setServicesInterested] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
+    const [showPasswordReg, setShowPasswordReg] = useState(false);
+    const [showConfirmPasswordReg, setShowConfirmPasswordReg] = useState(false);
 
     const [error, setError] = useState("");
     const [isLoading, setIsLoading] = useState(false);
@@ -48,6 +51,17 @@ export default function Login() {
     const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault();
         setError("");
+
+        if (password.length < 6) {
+            setError("Password must be at least 6 characters long.");
+            return;
+        }
+
+        if (password !== confirmPassword) {
+            setError("Passwords do not match.");
+            return;
+        }
+
         setIsLoading(true);
         try {
             await register({
@@ -205,15 +219,46 @@ export default function Login() {
 
                             <div className="space-y-2">
                                 <Label htmlFor="reg-password">Password</Label>
-                                <Input
-                                    id="reg-password"
-                                    type="password"
-                                    className="h-11"
-                                    value={password}
-                                    onChange={e => setPassword(e.target.value)}
-                                    required
-                                    minLength={6}
-                                />
+                                <div className="relative">
+                                    <Input
+                                        id="reg-password"
+                                        type={showPasswordReg ? "text" : "password"}
+                                        className="h-11 pr-10"
+                                        value={password}
+                                        onChange={e => setPassword(e.target.value)}
+                                        required
+                                        minLength={6}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPasswordReg(!showPasswordReg)}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary transition-colors"
+                                    >
+                                        {showPasswordReg ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="reg-confirm-password">Confirm Password</Label>
+                                <div className="relative">
+                                    <Input
+                                        id="reg-confirm-password"
+                                        type={showConfirmPasswordReg ? "text" : "password"}
+                                        className="h-11 pr-10"
+                                        value={confirmPassword}
+                                        onChange={e => setConfirmPassword(e.target.value)}
+                                        required
+                                        minLength={6}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowConfirmPasswordReg(!showConfirmPasswordReg)}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary transition-colors"
+                                    >
+                                        {showConfirmPasswordReg ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="space-y-2">
