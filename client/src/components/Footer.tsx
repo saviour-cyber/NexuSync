@@ -36,15 +36,15 @@ export function Footer() {
             <ul className="space-y-4 text-muted-foreground font-medium">
               <li className="flex items-start gap-3">
                 <MapPin className="w-5 h-5 text-primary shrink-0 mt-0.5" />
-                <span>123 Innovation Drive,<br />Tech District, TX 75001</span>
+                <span>Nyeri,<br />Kenya</span>
               </li>
               <li className="flex items-center gap-3">
                 <Phone className="w-5 h-5 text-primary shrink-0" />
-                <span>+1 (555) 123-4567</span>
+                <span>+254 740 879 234</span>
               </li>
               <li className="flex items-center gap-3">
                 <Mail className="w-5 h-5 text-primary shrink-0" />
-                <span>hello@nexasync.dev</span>
+                <span>ndohadaviz@gmail.com</span>
               </li>
             </ul>
           </div>

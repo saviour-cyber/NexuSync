@@ -70,7 +70,7 @@ export default function Home() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
             <div className="max-w-3xl">
               <motion.div initial="hidden" animate="visible" variants={staggerContainer}>
-                <motion.h1 variants={fadeInUp} className="text-5xl sm:text-6xl lg:text-7xl font-display font-extrabold text-secondary leading-[1.1] mb-6 tracking-tight text-balance">
+                <motion.h1 variants={fadeInUp} className="text-5xl sm:text-6xl lg:text-7xl font-display font-extrabold text-secondary leading-[1.1] mb-5 tracking-tight text-balance">
                   Elevate Your Business with <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-accent">Modern Technology</span>
                 </motion.h1>
 
@@ -216,7 +216,7 @@ export default function Home() {
         {/* CONTACT SECTION */}
         <section id="contact" className="py-24 bg-white relative">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="bg-secondary rounded-[2.5rem] overflow-hidden shadow-2xl relative">
+            <div className="bg-gradient-to-br from-slate-700 via-slate-800 to-indigo-900 rounded-[2.5rem] overflow-hidden shadow-2xl relative">
 
               {/* Background Accents */}
               <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/20 rounded-full blur-[100px] pointer-events-none"></div>
