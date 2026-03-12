@@ -70,14 +70,6 @@ export default function Home() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
             <div className="max-w-3xl">
               <motion.div initial="hidden" animate="visible" variants={staggerContainer}>
-                <motion.div variants={fadeInUp} className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary font-medium text-sm mb-6 border border-primary/20">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
-                  </span>
-                  Next-Gen IT Solutions
-                </motion.div>
-
                 <motion.h1 variants={fadeInUp} className="text-5xl sm:text-6xl lg:text-7xl font-display font-extrabold text-secondary leading-[1.1] mb-6 tracking-tight text-balance">
                   Elevate Your Business with <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-accent">Modern Technology</span>
                 </motion.h1>
@@ -160,7 +152,7 @@ export default function Home() {
                       onClick={() => setLeadDialogService(service.title)}
                       className="flex items-center justify-center w-full gap-2 bg-[#25D366] hover:bg-[#128c7e] text-white px-4 py-2.5 rounded-xl transition-all shadow-md shadow-[#25D366]/20 font-semibold text-sm hover:-translate-y-0.5"
                     >
-                      <MessageSquare className="w-4 h-4" /> Inquire on WhatsApp
+                      Inquire on WhatsApp
                     </button>
                   </div>
                 </motion.div>
@@ -233,7 +225,6 @@ export default function Home() {
               <div className="grid grid-cols-1 lg:grid-cols-2 relative z-10">
                 {/* Contact Info */}
                 <div className="p-12 lg:p-16 text-white flex flex-col justify-center">
-                  <MessageSquare className="w-12 h-12 text-primary mb-6" />
                   <h3 className="text-3xl md:text-5xl font-display font-bold mb-6">Let's build something amazing together.</h3>
                   <p className="text-white/70 text-lg mb-8 max-w-md">
                     Ready to transform your IT infrastructure? Fill out the form, and our experts will get back to you within 24 hours.
@@ -241,8 +232,8 @@ export default function Home() {
 
                   <div className="mt-auto pt-8 border-t border-white/10">
                     <p className="font-medium text-white/90">Email us directly:</p>
-                    <a href="mailto:hello@nexasync.dev" className="text-xl font-bold text-primary hover:text-white transition-colors">
-                      hello@nexasync.dev
+                    <a href="mailto:ndohadaviz@gmail.com" className="text-xl font-bold text-primary hover:text-white transition-colors">
+                      ndohadaviz@gmail.com
                     </a>
                   </div>
                 </div>
@@ -260,7 +251,7 @@ export default function Home() {
                           <FormItem>
                             <FormLabel className="text-secondary font-semibold">Full Name</FormLabel>
                             <FormControl>
-                              <Input placeholder="John Doe" className="h-12 bg-slate-50 border-border/60 focus-visible:ring-primary/20" {...field} />
+                              <Input className="h-12 bg-slate-50 border-border/60 focus-visible:ring-primary/20" {...field} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -275,7 +266,7 @@ export default function Home() {
                             <FormItem>
                               <FormLabel className="text-secondary font-semibold">Email Address</FormLabel>
                               <FormControl>
-                                <Input type="email" placeholder="john@example.com" className="h-12 bg-slate-50 border-border/60 focus-visible:ring-primary/20" {...field} />
+                                <Input type="email" className="h-12 bg-slate-50 border-border/60 focus-visible:ring-primary/20" {...field} />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -289,7 +280,7 @@ export default function Home() {
                             <FormItem>
                               <FormLabel className="text-secondary font-semibold">Phone (Optional)</FormLabel>
                               <FormControl>
-                                <Input placeholder="+1 (555) 000-0000" className="h-12 bg-slate-50 border-border/60 focus-visible:ring-primary/20" {...field} value={field.value || ""} />
+                                <Input className="h-12 bg-slate-50 border-border/60 focus-visible:ring-primary/20" {...field} value={field.value || ""} />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -305,7 +296,6 @@ export default function Home() {
                             <FormLabel className="text-secondary font-semibold">How can we help?</FormLabel>
                             <FormControl>
                               <Textarea
-                                placeholder="Tell us about your project or IT needs..."
                                 className="resize-none min-h-[120px] bg-slate-50 border-border/60 focus-visible:ring-primary/20"
                                 {...field}
                               />

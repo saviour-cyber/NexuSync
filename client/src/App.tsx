@@ -1,4 +1,4 @@
-import { Switch, Route, Redirect } from "wouter";
+import { Switch, Route, Redirect, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -48,6 +48,7 @@ function ClientGuard({ children }: { children: React.ReactNode }) {
 
 function Router() {
   const { user, isLoading } = useAuth();
+  const [location] = useLocation();
 
   // While session is being verified, show a spinner to prevent flashing login pages
   const spinner = <div className="min-h-screen flex items-center justify-center"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
@@ -122,8 +123,8 @@ function Router() {
         <Route component={NotFound} />
       </Switch>
 
-      {/* Floating WhatsApp chat — shown on public pages only */}
-      {(!user || user.role === "client") && <LiveChat />}
+      {/* Floating WhatsApp chat — shown on landing page only */}
+      {!user && location === "/" && <LiveChat />}
     </>
   );
 }
