@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Cpu, Lock, Mail, AlertCircle, Building2, User, Sparkles } from "lucide-react";
+import { Cpu, Lock, Mail, AlertCircle, Building2, User, Sparkles, Eye, EyeOff } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function Login() {
@@ -18,6 +18,7 @@ export default function Login() {
     // Login Fields
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
 
     // Register Fields
     const [clientName, setClientName] = useState("");
@@ -85,18 +86,13 @@ export default function Login() {
                         </span>
                     </div>
                     <h1 className="text-2xl font-bold text-slate-900 mt-2">
-                        {isLoginBlock ? "Welcome Back" : "Sign Up"}
+                        {isLoginBlock ? "Welcome Back!" : "Sign Up"}
                     </h1>
                 </div>
 
                 {/* Card */}
                 <div className="bg-white rounded-3xl shadow-2xl shadow-black/[0.05] border border-border/50 p-8">
-                    {isLoginBlock && (
-                        <div className="text-center mb-8">
-                            <p className="text-secondary font-medium text-lg">Sign in to your account</p>
-                            <p className="text-muted-foreground text-sm mt-1">Access your projects, files, and billing.</p>
-                        </div>
-                    )}
+
 
                     {error && (
                         <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-xl p-3 mb-6 text-sm">
@@ -123,17 +119,33 @@ export default function Login() {
                             </div>
 
                             <div className="space-y-2">
-                                <Label htmlFor="login-password">Password</Label>
+                                <div className="flex items-center justify-between">
+                                    <Label htmlFor="login-password">Password</Label>
+                                    <button 
+                                        type="button" 
+                                        className="text-xs text-primary hover:underline font-medium"
+                                        onClick={() => {/* Handle forgot password */}}
+                                    >
+                                        Forgot password?
+                                    </button>
+                                </div>
                                 <div className="relative">
                                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                                     <Input
                                         id="login-password"
-                                        type="password"
-                                        className="pl-10 h-12"
+                                        type={showPassword ? "text" : "password"}
+                                        className="pl-10 pr-10 h-12"
                                         value={password}
                                         onChange={e => setPassword(e.target.value)}
                                         required
                                     />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary transition-colors"
+                                    >
+                                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                    </button>
                                 </div>
                             </div>
 
