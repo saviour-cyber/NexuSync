@@ -70,6 +70,12 @@ export default function Home() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
             <div className="max-w-3xl">
               <motion.div initial="hidden" animate="visible" variants={staggerContainer}>
+                <motion.p
+                  variants={fadeInUp}
+                  className="text-sm sm:text-base font-semibold tracking-[0.2em] uppercase text-primary/80 mb-4 font-display"
+                >
+                  Your Partner in Digital Success
+                </motion.p>
                 <motion.h1 variants={fadeInUp} className="text-5xl sm:text-6xl lg:text-7xl font-display font-extrabold text-secondary leading-[1.1] mb-5 tracking-tight text-balance">
                   Elevate Your Business with <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-accent">Modern Technology</span>
                 </motion.h1>
