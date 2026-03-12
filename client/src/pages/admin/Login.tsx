@@ -32,7 +32,7 @@ export default function AdminLogin() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-slate-900 p-4">
+        <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -40,18 +40,21 @@ export default function AdminLogin() {
                 className="w-full max-w-md"
             >
                 {/* Logo */}
-                <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-800 border border-slate-700 mb-4 shadow-xl">
-                        <ShieldAlert className="w-8 h-8 text-primary" />
+                <div className="flex justify-center mb-8">
+                    <div className="flex items-center gap-2">
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white shadow-lg shadow-primary/25">
+                            <Cpu className="w-7 h-7" />
+                        </div>
+                        <span className="font-display font-bold text-3xl tracking-tight text-slate-900">
+                            Nexa<span className="text-primary">Sync</span>
+                        </span>
                     </div>
-                    <h1 className="text-2xl font-bold text-white tracking-tight">System Access</h1>
-                    <p className="text-slate-400 mt-1">Admin Portal Authentication</p>
                 </div>
 
                 {/* Card */}
-                <div className="bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 p-8">
+                <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-8">
                     {error && (
-                        <div className="flex items-center gap-2 text-red-400 bg-red-950/50 border border-red-900/50 rounded-xl p-3 mb-6 text-sm">
+                        <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-xl p-3 mb-6 text-sm">
                             <AlertCircle className="w-4 h-4 shrink-0" />
                             {error}
                         </div>
@@ -59,14 +62,13 @@ export default function AdminLogin() {
 
                     <form onSubmit={handleSubmit} className="space-y-5">
                         <div className="space-y-2">
-                            <Label htmlFor="email" className="text-slate-300">Admin Email</Label>
+                            <Label htmlFor="email" className="text-slate-700 font-medium">Admin Email</Label>
                             <div className="relative">
-                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                                 <Input
                                     id="email"
                                     type="email"
-                                    placeholder="admin@wchch.dev"
-                                    className="pl-10 h-12 bg-slate-900 border-slate-700 text-white placeholder:text-slate-600 focus-visible:ring-primary"
+                                    className="pl-10 h-12 bg-white border-slate-200 text-slate-900 focus-visible:ring-primary"
                                     value={email}
                                     onChange={e => setEmail(e.target.value)}
                                     required
@@ -75,14 +77,13 @@ export default function AdminLogin() {
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="password" className="text-slate-300">Password</Label>
+                            <Label htmlFor="password" className="text-slate-700 font-medium">Password</Label>
                             <div className="relative">
-                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                                 <Input
                                     id="password"
                                     type="password"
-                                    placeholder="••••••••"
-                                    className="pl-10 h-12 bg-slate-900 border-slate-700 text-white placeholder:text-slate-600 focus-visible:ring-primary"
+                                    className="pl-10 h-12 bg-white border-slate-200 text-slate-900 focus-visible:ring-primary"
                                     value={password}
                                     onChange={e => setPassword(e.target.value)}
                                     required
@@ -99,16 +100,12 @@ export default function AdminLogin() {
                         </Button>
                     </form>
 
-                    <div className="mt-6 pt-6 border-t border-slate-700 text-center">
+                    <div className="mt-6 pt-6 border-t border-slate-100 text-center">
                         <a href="/" className="text-sm text-slate-500 hover:text-primary transition-colors">
                             ← Return to public site
                         </a>
                     </div>
                 </div>
-
-                <p className="text-center text-xs text-slate-600 mt-6 font-mono">
-                    NexaSync Secure Gateway
-                </p>
             </motion.div>
         </div>
     );
