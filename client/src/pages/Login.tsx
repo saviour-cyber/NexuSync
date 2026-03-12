@@ -84,6 +84,7 @@ export default function Login() {
                             Nexa<span className="text-primary">Sync</span>
                         </span>
                     </div>
+                    <h1 className="text-2xl font-bold text-slate-900 mt-2">Welcome Back</h1>
                 </div>
 
                 {/* Card */}
@@ -91,17 +92,15 @@ export default function Login() {
                     <Tabs defaultValue="login" className="w-full" onValueChange={(val) => setIsLoginBlock(val === 'login')}>
                         <TabsList className="grid w-full grid-cols-2 mb-8 h-12 rounded-xl bg-slate-100 p-1">
                             <TabsTrigger value="login" className="rounded-lg font-medium text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm">Sign In</TabsTrigger>
-                            <TabsTrigger value="register" className="rounded-lg font-medium text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm">Create Account</TabsTrigger>
+                            <TabsTrigger value="register" className="rounded-lg font-medium text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm">Sign Up</TabsTrigger>
                         </TabsList>
 
-                        <div className="text-center mb-8">
-                            <p className="text-secondary font-medium text-lg">
-                                {isLoginBlock ? "Sign in to your account" : "Join NexaSync Platform"}
-                            </p>
-                            <p className="text-muted-foreground text-sm mt-1">
-                                {isLoginBlock ? "Access your projects, files, and billing." : "Get instant access to your customized portal."}
-                            </p>
-                        </div>
+                        {isLoginBlock && (
+                            <div className="text-center mb-8">
+                                <p className="text-secondary font-medium text-lg">Sign in to your account</p>
+                                <p className="text-muted-foreground text-sm mt-1">Access your projects, files, and billing.</p>
+                            </div>
+                        )}
 
                         {error && (
                             <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-xl p-3 mb-6 text-sm">
@@ -151,6 +150,19 @@ export default function Login() {
                                 >
                                     {isLoading ? "Signing in..." : "Sign In"}
                                 </Button>
+
+                                <div className="text-center mt-4">
+                                    <button 
+                                        type="button"
+                                        onClick={() => {
+                                            const registerTab = document.querySelector('[value="register"]') as HTMLElement;
+                                            registerTab?.click();
+                                        }}
+                                        className="text-sm text-muted-foreground hover:text-primary transition-colors"
+                                    >
+                                        Don't have an account? <span className="text-primary font-semibold">Sign up?</span>
+                                    </button>
+                                </div>
                             </form>
                         </TabsContent>
 
@@ -163,7 +175,6 @@ export default function Login() {
                                             <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                                             <Input
                                                 id="reg-name"
-                                                placeholder="John Doe"
                                                 className="pl-10 h-11"
                                                 value={clientName}
                                                 onChange={e => setClientName(e.target.value)}
@@ -177,7 +188,6 @@ export default function Login() {
                                             <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                                             <Input
                                                 id="reg-company"
-                                                placeholder="Acme Corp"
                                                 className="pl-10 h-11"
                                                 value={companyName}
                                                 onChange={e => setCompanyName(e.target.value)}
@@ -193,7 +203,6 @@ export default function Login() {
                                         <Input
                                             id="reg-email"
                                             type="email"
-                                            placeholder="client@example.com"
                                             className="pl-10 h-11"
                                             value={email}
                                             onChange={e => setEmail(e.target.value)}
@@ -209,7 +218,6 @@ export default function Login() {
                                         <Input
                                             id="reg-password"
                                             type="password"
-                                            placeholder="••••••••"
                                             className="pl-10 h-11"
                                             value={password}
                                             onChange={e => setPassword(e.target.value)}
@@ -225,7 +233,6 @@ export default function Login() {
                                         <Sparkles className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                                         <Input
                                             id="reg-services"
-                                            placeholder="e.g. Web Development, SEO"
                                             className="pl-10 h-11"
                                             value={servicesInterested}
                                             onChange={e => setServicesInterested(e.target.value)}
@@ -239,7 +246,7 @@ export default function Login() {
                                     className="w-full h-12 text-base font-semibold rounded-xl bg-gradient-to-r from-primary to-accent hover:opacity-90 transition-opacity shadow-lg shadow-primary/20"
                                     disabled={isLoading}
                                 >
-                                    {isLoading ? "Creating Portal..." : "Create Account & Portal"}
+                                    {isLoading ? "Creating Portal..." : "Sign Up"}
                                 </Button>
                             </form>
                         </TabsContent>
