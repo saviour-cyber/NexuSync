@@ -72,7 +72,7 @@ export default function Home() {
               <motion.div initial="hidden" animate="visible" variants={staggerContainer}>
                 <motion.p
                   variants={fadeInUp}
-                  className="text-2xl sm:text-3xl font-display font-extrabold tracking-wide mb-5 bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent drop-shadow-sm"
+                  className="text-2xl sm:text-3xl font-display font-extrabold italic tracking-wide mb-5 bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent drop-shadow-sm"
                 >
                   Your Partner in Digital Success
                 </motion.p>
