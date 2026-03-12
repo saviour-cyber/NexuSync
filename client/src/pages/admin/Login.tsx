@@ -4,7 +4,7 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Cpu, Lock, Mail, AlertCircle, ShieldAlert } from "lucide-react";
+import { Cpu, Lock, Mail, AlertCircle, ShieldAlert, Eye, EyeOff } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function AdminLogin() {
@@ -12,6 +12,7 @@ export default function AdminLogin() {
     const [, navigate] = useLocation();
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState("");
     const [isLoading, setIsLoading] = useState(false);
 
@@ -53,6 +54,10 @@ export default function AdminLogin() {
 
                 {/* Card */}
                 <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-8">
+                    <div className="text-center mb-8">
+                        <h1 className="text-2xl font-bold text-slate-900 mt-2">Welcome Back!</h1>
+                    </div>
+
                     {error && (
                         <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-xl p-3 mb-6 text-sm">
                             <AlertCircle className="w-4 h-4 shrink-0" />
@@ -77,17 +82,33 @@ export default function AdminLogin() {
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="password" className="text-slate-700 font-medium">Password</Label>
+                            <div className="flex items-center justify-between">
+                                <Label htmlFor="password" className="text-slate-700 font-medium">Password</Label>
+                                <button 
+                                    type="button" 
+                                    className="text-xs text-primary hover:underline font-medium"
+                                    onClick={() => {/* Handle forgot password */}}
+                                >
+                                    Forgot password?
+                                </button>
+                            </div>
                             <div className="relative">
                                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                                 <Input
                                     id="password"
-                                    type="password"
-                                    className="pl-10 h-12 bg-white border-slate-200 text-slate-900 focus-visible:ring-primary"
+                                    type={showPassword ? "text" : "password"}
+                                    className="pl-10 pr-10 h-12 bg-white border-slate-200 text-slate-900 focus-visible:ring-primary"
                                     value={password}
                                     onChange={e => setPassword(e.target.value)}
                                     required
                                 />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-primary transition-colors"
+                                >
+                                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                </button>
                             </div>
                         </div>
 
