@@ -84,173 +84,156 @@ export default function Login() {
                             Nexa<span className="text-primary">Sync</span>
                         </span>
                     </div>
-                    <h1 className="text-2xl font-bold text-slate-900 mt-2">Welcome Back</h1>
+                    <h1 className="text-2xl font-bold text-slate-900 mt-2">
+                        {isLoginBlock ? "Welcome Back" : "Sign Up"}
+                    </h1>
                 </div>
 
                 {/* Card */}
                 <div className="bg-white rounded-3xl shadow-2xl shadow-black/[0.05] border border-border/50 p-8">
-                    <Tabs defaultValue="login" className="w-full" onValueChange={(val) => setIsLoginBlock(val === 'login')}>
-                        <TabsList className="grid w-full grid-cols-2 mb-8 h-12 rounded-xl bg-slate-100 p-1">
-                            <TabsTrigger value="login" className="rounded-lg font-medium text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm">Sign In</TabsTrigger>
-                            <TabsTrigger value="register" className="rounded-lg font-medium text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm">Sign Up</TabsTrigger>
-                        </TabsList>
+                    {isLoginBlock && (
+                        <div className="text-center mb-8">
+                            <p className="text-secondary font-medium text-lg">Sign in to your account</p>
+                            <p className="text-muted-foreground text-sm mt-1">Access your projects, files, and billing.</p>
+                        </div>
+                    )}
 
-                        {isLoginBlock && (
-                            <div className="text-center mb-8">
-                                <p className="text-secondary font-medium text-lg">Sign in to your account</p>
-                                <p className="text-muted-foreground text-sm mt-1">Access your projects, files, and billing.</p>
+                    {error && (
+                        <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-xl p-3 mb-6 text-sm">
+                            <AlertCircle className="w-4 h-4 shrink-0" />
+                            {error}
+                        </div>
+                    )}
+
+                    {isLoginBlock ? (
+                        <form onSubmit={handleLogin} className="space-y-5">
+                            <div className="space-y-2">
+                                <Label htmlFor="login-email">Email Address</Label>
+                                <div className="relative">
+                                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                                    <Input
+                                        id="login-email"
+                                        type="email"
+                                        className="pl-10 h-12"
+                                        value={email}
+                                        onChange={e => setEmail(e.target.value)}
+                                        required
+                                    />
+                                </div>
                             </div>
-                        )}
 
-                        {error && (
-                            <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-xl p-3 mb-6 text-sm">
-                                <AlertCircle className="w-4 h-4 shrink-0" />
-                                {error}
+                            <div className="space-y-2">
+                                <Label htmlFor="login-password">Password</Label>
+                                <div className="relative">
+                                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                                    <Input
+                                        id="login-password"
+                                        type="password"
+                                        className="pl-10 h-12"
+                                        value={password}
+                                        onChange={e => setPassword(e.target.value)}
+                                        required
+                                    />
+                                </div>
                             </div>
-                        )}
 
-                        <TabsContent value="login">
-                            <form onSubmit={handleLogin} className="space-y-5">
-                                <div className="space-y-2">
-                                    <Label htmlFor="login-email">Email Address</Label>
-                                    <div className="relative">
-                                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                                        <Input
-                                            id="login-email"
-                                            type="email"
-                                            placeholder="client@example.com"
-                                            className="pl-10 h-12"
-                                            value={email}
-                                            onChange={e => setEmail(e.target.value)}
-                                            required
-                                        />
-                                    </div>
-                                </div>
+                            <Button
+                                type="submit"
+                                className="w-full h-12 text-base font-semibold rounded-xl shadow-lg shadow-primary/20"
+                                disabled={isLoading}
+                            >
+                                {isLoading ? "Signing in..." : "Sign In"}
+                            </Button>
 
-                                <div className="space-y-2">
-                                    <Label htmlFor="login-password">Password</Label>
-                                    <div className="relative">
-                                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                                        <Input
-                                            id="login-password"
-                                            type="password"
-                                            placeholder="••••••••"
-                                            className="pl-10 h-12"
-                                            value={password}
-                                            onChange={e => setPassword(e.target.value)}
-                                            required
-                                        />
-                                    </div>
-                                </div>
-
-                                <Button
-                                    type="submit"
-                                    className="w-full h-12 text-base font-semibold rounded-xl shadow-lg shadow-primary/20"
-                                    disabled={isLoading}
+                            <div className="text-center mt-4">
+                                <button 
+                                    type="button"
+                                    onClick={() => setIsLoginBlock(false)}
+                                    className="text-sm text-muted-foreground hover:text-primary transition-colors"
                                 >
-                                    {isLoading ? "Signing in..." : "Sign In"}
-                                </Button>
-
-                                <div className="text-center mt-4">
-                                    <button 
-                                        type="button"
-                                        onClick={() => {
-                                            const registerTab = document.querySelector('[value="register"]') as HTMLElement;
-                                            registerTab?.click();
-                                        }}
-                                        className="text-sm text-muted-foreground hover:text-primary transition-colors"
-                                    >
-                                        Don't have an account? <span className="text-primary font-semibold">Sign up?</span>
-                                    </button>
-                                </div>
-                            </form>
-                        </TabsContent>
-
-                        <TabsContent value="register">
-                            <form onSubmit={handleRegister} className="space-y-5">
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="reg-name">Your Name</Label>
-                                        <div className="relative">
-                                            <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                                            <Input
-                                                id="reg-name"
-                                                className="pl-10 h-11"
-                                                value={clientName}
-                                                onChange={e => setClientName(e.target.value)}
-                                                required
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="reg-company">Company</Label>
-                                        <div className="relative">
-                                            <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                                            <Input
-                                                id="reg-company"
-                                                className="pl-10 h-11"
-                                                value={companyName}
-                                                onChange={e => setCompanyName(e.target.value)}
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-
+                                    Don't have an account? <span className="text-primary font-semibold">Sign up?</span>
+                                </button>
+                            </div>
+                        </form>
+                    ) : (
+                        <form onSubmit={handleRegister} className="space-y-5">
+                            <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label htmlFor="reg-email">Email Address</Label>
-                                    <div className="relative">
-                                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                                        <Input
-                                            id="reg-email"
-                                            type="email"
-                                            className="pl-10 h-11"
-                                            value={email}
-                                            onChange={e => setEmail(e.target.value)}
-                                            required
-                                        />
-                                    </div>
+                                    <Label htmlFor="reg-name">Your Name</Label>
+                                    <Input
+                                        id="reg-name"
+                                        className="h-11"
+                                        value={clientName}
+                                        onChange={e => setClientName(e.target.value)}
+                                        required
+                                    />
                                 </div>
-
                                 <div className="space-y-2">
-                                    <Label htmlFor="reg-password">Password</Label>
-                                    <div className="relative">
-                                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                                        <Input
-                                            id="reg-password"
-                                            type="password"
-                                            className="pl-10 h-11"
-                                            value={password}
-                                            onChange={e => setPassword(e.target.value)}
-                                            required
-                                            minLength={6}
-                                        />
-                                    </div>
+                                    <Label htmlFor="reg-company">Company</Label>
+                                    <Input
+                                        id="reg-company"
+                                        className="h-11"
+                                        value={companyName}
+                                        onChange={e => setCompanyName(e.target.value)}
+                                    />
                                 </div>
+                            </div>
 
-                                <div className="space-y-2">
-                                    <Label htmlFor="reg-services">Interested Services</Label>
-                                    <div className="relative">
-                                        <Sparkles className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                                        <Input
-                                            id="reg-services"
-                                            className="pl-10 h-11"
-                                            value={servicesInterested}
-                                            onChange={e => setServicesInterested(e.target.value)}
-                                        />
-                                    </div>
-                                    <p className="text-xs text-muted-foreground text-right">This automatically generates an initial quote for you.</p>
-                                </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="reg-email">Email Address</Label>
+                                <Input
+                                    id="reg-email"
+                                    type="email"
+                                    className="h-11"
+                                    value={email}
+                                    onChange={e => setEmail(e.target.value)}
+                                    required
+                                />
+                            </div>
 
-                                <Button
-                                    type="submit"
-                                    className="w-full h-12 text-base font-semibold rounded-xl bg-gradient-to-r from-primary to-accent hover:opacity-90 transition-opacity shadow-lg shadow-primary/20"
-                                    disabled={isLoading}
+                            <div className="space-y-2">
+                                <Label htmlFor="reg-password">Password</Label>
+                                <Input
+                                    id="reg-password"
+                                    type="password"
+                                    className="h-11"
+                                    value={password}
+                                    onChange={e => setPassword(e.target.value)}
+                                    required
+                                    minLength={6}
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="reg-services">Interested Services</Label>
+                                <Input
+                                    id="reg-services"
+                                    className="h-11"
+                                    value={servicesInterested}
+                                    onChange={e => setServicesInterested(e.target.value)}
+                                />
+                                <p className="text-xs text-muted-foreground text-right">This automatically generates an initial quote for you.</p>
+                            </div>
+
+                            <Button
+                                type="submit"
+                                className="w-full h-12 text-base font-semibold rounded-xl bg-gradient-to-r from-primary to-accent hover:opacity-90 transition-opacity shadow-lg shadow-primary/20"
+                                disabled={isLoading}
+                            >
+                                {isLoading ? "Creating Portal..." : "Sign Up"}
+                            </Button>
+
+                            <div className="text-center mt-4">
+                                <button 
+                                    type="button"
+                                    onClick={() => setIsLoginBlock(true)}
+                                    className="text-sm text-muted-foreground hover:text-primary transition-colors"
                                 >
-                                    {isLoading ? "Creating Portal..." : "Sign Up"}
-                                </Button>
-                            </form>
-                        </TabsContent>
-                    </Tabs>
+                                    Already have an account? <span className="text-primary font-semibold">Sign In</span>
+                                </button>
+                            </div>
+                        </form>
+                    )}
 
                     <div className="mt-8 pt-6 border-t border-border/50 text-center">
                         <a href="/" className="text-sm text-muted-foreground hover:text-primary transition-colors">
