@@ -7,11 +7,21 @@ import { useState } from "react";
 import { CreditCard, CheckCircle, Clock, AlertCircle, Smartphone, Building2, DollarSign } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
+const statusDisplay: Record<string, string> = {
+    paid: "Paid",
+    pending: "Awaiting confirmation",
+    unpaid: "Pending",
+    failed: "Failed",
+    overdue: "Overdue",
+    partially_paid: "Partially Paid",
+};
+
 const statusColors: Record<string, string> = {
     paid: "bg-emerald-100 text-emerald-700",
     pending: "bg-amber-100 text-amber-700",
-    unpaid: "bg-slate-100 text-slate-600",
+    unpaid: "bg-blue-100 text-blue-700",
     failed: "bg-red-100 text-red-700",
+    overdue: "bg-red-100 text-red-700",
     partially_paid: "bg-blue-100 text-blue-700",
 };
 
@@ -26,9 +36,6 @@ const statusIcon: Record<string, any> = {
 export default function AdminPayments() {
     const { toast } = useToast();
     const qc = useQueryClient();
-    const [bankModal, setBankModal] = useState<any>(null);
-    const [bankRef, setBankRef] = useState("");
-    const [bankAmount, setBankAmount] = useState("");
     const [mpesaModal, setMpesaModal] = useState<any>(null);
     const [mpesaPhone, setMpesaPhone] = useState("");
 
@@ -138,15 +145,12 @@ export default function AdminPayments() {
                                     <div className="flex items-center gap-3 shrink-0">
                                         <span className="text-sm font-bold text-secondary">KSh {inv.amount?.toLocaleString()}</span>
                                         <span className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium ${statusColors[inv.status] || "bg-slate-100 text-slate-600"}`}>
-                                            <StatusIcon className="w-3 h-3" />{inv.status}
+                                            <StatusIcon className="w-3 h-3" />{statusDisplay[inv.status] || inv.status}
                                         </span>
                                         {inv.status !== "paid" && (
                                             <div className="flex gap-2">
                                                 <Button size="sm" variant="outline" className="gap-1.5 text-xs h-8" onClick={() => { setMpesaModal(inv); setMpesaPhone(""); }}>
                                                     <Smartphone className="w-3 h-3" /> M-Pesa
-                                                </Button>
-                                                <Button size="sm" variant="outline" className="gap-1.5 text-xs h-8" onClick={() => { setBankModal(inv); setBankRef(""); setBankAmount(""); }}>
-                                                    <Building2 className="w-3 h-3" /> Bank
                                                 </Button>
                                             </div>
                                         )}
@@ -158,26 +162,6 @@ export default function AdminPayments() {
                 )}
             </div>
 
-            {/* Bank Verify Modal */}
-            <Dialog open={!!bankModal} onOpenChange={() => setBankModal(null)}>
-                <DialogContent className="sm:max-w-md">
-                    <DialogHeader><DialogTitle>Verify Bank Transfer — Invoice #{bankModal?.id}</DialogTitle></DialogHeader>
-                    <div className="space-y-4 py-2">
-                        <div>
-                            <label className="text-sm font-medium mb-1 block">Bank Reference Number</label>
-                            <Input placeholder="e.g. TXN2024001234" value={bankRef} onChange={e => setBankRef(e.target.value)} />
-                        </div>
-                        <div>
-                            <label className="text-sm font-medium mb-1 block">Amount Received (KSh)</label>
-                            <Input type="number" placeholder={bankModal?.amount?.toString()} value={bankAmount} onChange={e => setBankAmount(e.target.value)} />
-                        </div>
-                        <Button className="w-full" disabled={!bankRef || verifyBank.isPending}
-                            onClick={() => verifyBank.mutate({ invoiceId: bankModal.id, reference: bankRef, amount: bankAmount || bankModal?.amount })}>
-                            {verifyBank.isPending ? "Verifying..." : "✅ Mark as Paid"}
-                        </Button>
-                    </div>
-                </DialogContent>
-            </Dialog>
 
             {/* M-Pesa Modal */}
             <Dialog open={!!mpesaModal} onOpenChange={() => setMpesaModal(null)}>

@@ -75,7 +75,9 @@ export default function PortalDashboard() {
                                     </div>
                                     <div className="text-right">
                                         <p className="font-bold text-secondary text-sm">KSh {inv.amount.toLocaleString()}</p>
-                                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${inv.status === "paid" ? "bg-emerald-100 text-emerald-700" : inv.status === "overdue" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>{inv.status}</span>
+                                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${inv.status === "paid" ? "bg-emerald-100 text-emerald-700" : inv.status === "overdue" || inv.status === "failed" ? "bg-red-100 text-red-700" : inv.status === "pending" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>
+                                            {{ unpaid: "Pending", pending: "Awaiting confirmation", paid: "Paid", overdue: "Overdue", failed: "Failed" }[inv.status as string] || inv.status}
+                                        </span>
                                     </div>
                                 </li>
                             ))}

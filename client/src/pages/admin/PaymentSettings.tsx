@@ -17,8 +17,7 @@ export default function PaymentSettings() {
         mpesa_shortcode: "",
         mpesa_passkey: "",
         mpesa_consumer_key: "",
-        mpesa_consumer_secret: "",
-        bank_details: ""
+        mpesa_consumer_secret: ""
     });
 
     const { data: settings, isLoading } = useQuery({
@@ -31,8 +30,7 @@ export default function PaymentSettings() {
                 mpesa_shortcode: settings.mpesa_shortcode || "",
                 mpesa_passkey: settings.mpesa_passkey || "",
                 mpesa_consumer_key: settings.mpesa_consumer_key || "",
-                mpesa_consumer_secret: settings.mpesa_consumer_secret || "",
-                bank_details: settings.bank_details || ""
+                mpesa_consumer_secret: settings.mpesa_consumer_secret || ""
             });
         }
     }, [settings]);
@@ -76,7 +74,7 @@ export default function PaymentSettings() {
                         Payment Gateways
                     </h1>
                     <p className="text-muted-foreground mt-2 text-lg">
-                        Configure M-Pesa API keys and Bank Transfer details for your clients.
+                        Configure M-Pesa API keys for your clients.
                     </p>
                 </div>
 
@@ -144,30 +142,7 @@ export default function PaymentSettings() {
                         </div>
                     </div>
 
-                    {/* Bank Transfer Settings Card */}
-                    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                        <div className="border-b border-slate-100 bg-slate-50/50 p-6 flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
-                                <Building2 className="w-5 h-5 text-blue-600" />
-                            </div>
-                            <div>
-                                <h2 className="text-xl font-semibold text-slate-800">Bank Transfer Details</h2>
-                                <p className="text-sm text-slate-500">This is exactly what the client will see when they choose "Bank Transfer".</p>
-                            </div>
-                        </div>
-                        <div className="p-6">
-                            <div className="space-y-3">
-                                <Label className="text-slate-700 font-medium">Account Information Display Text</Label>
-                                <Textarea 
-                                    className="min-h-[160px] font-mono text-sm leading-relaxed p-4"
-                                    value={formData.bank_details}
-                                    placeholder={`Bank Name: Equity Bank\nAccount Name: NexaSync Ltd\nAccount Number: 123456789012\nBranch: Nairobi`}
-                                    onChange={e => setFormData(p => ({ ...p, bank_details: e.target.value }))}
-                                />
-                                <p className="text-xs text-muted-foreground flex justify-end">Format however you want. Line breaks will be preserved.</p>
-                            </div>
-                        </div>
-                    </div>
+
 
                     <div className="flex justify-end pt-4 pb-12">
                         <Button 

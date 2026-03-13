@@ -87,6 +87,14 @@ export default function AdminInvoices() {
         }));
     };
 
+    const statusDisplay: Record<string, string> = {
+        unpaid: "Pending",
+        pending: "Awaiting confirmation",
+        paid: "Paid",
+        overdue: "Overdue",
+        failed: "Failed",
+    };
+
     const stColors: Record<string, string> = {
         unpaid: "bg-amber-100 text-amber-700",
         pending: "bg-blue-100 text-blue-700",
@@ -136,7 +144,7 @@ export default function AdminInvoices() {
                                         <td className="p-4 text-muted-foreground">{client?.name || `Client #${inv.clientId || "N/A"}`}</td>
                                         <td className="p-4 text-muted-foreground text-xs">{project?.title || "—"}</td>
                                         <td className="p-4 font-bold text-secondary">KSh {inv.amount?.toLocaleString()}</td>
-                                        <td className="p-4"><span className={`px-2 py-1 rounded-full text-xs font-medium ${stColors[inv.status] || "bg-slate-100"}`}>{inv.status}</span></td>
+                                        <td className="p-4"><span className={`px-2 py-1 rounded-full text-xs font-medium ${stColors[inv.status] || "bg-slate-100"}`}>{statusDisplay[inv.status] || inv.status}</span></td>
                                         <td className="p-4 text-xs text-muted-foreground">
                                             {inv.paymentMethod ? (
                                                 <div className="flex flex-col">
@@ -148,31 +156,10 @@ export default function AdminInvoices() {
                                         <td className="p-4 text-muted-foreground">{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString() : "—"}</td>
                                         <td className="p-4 flex gap-2 items-center">
                                             <Select value={inv.status} onValueChange={v => updateInvoice.mutate({ id: inv.id, status: v })}>
-                                                <SelectTrigger className="h-7 text-xs w-28"><SelectValue /></SelectTrigger>
-                                                <SelectContent>{["unpaid", "pending", "paid", "overdue", "failed"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                                                <SelectTrigger className="h-7 text-xs w-auto min-w-[120px]"><SelectValue /></SelectTrigger>
+                                                <SelectContent>{["unpaid", "pending", "paid", "overdue", "failed"].map(s => <SelectItem key={s} value={s}>{statusDisplay[s] || s}</SelectItem>)}</SelectContent>
                                             </Select>
                                             
-                                            {inv.paymentMethod === "bank" && inv.status === "pending" && (
-                                                <Button size="sm" variant="outline" className="h-7 text-xs bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
-                                                    onClick={async () => {
-                                                        try {
-                                                            const res = await fetch(`/api/admin/invoices/${inv.id}/receipts`);
-                                                            const receipts = await res.json();
-                                                            if (receipts && receipts.length > 0) {
-                                                                // Fast-forward to marking it paid if we found a receipt automatically for simplicity here
-                                                                const latest = receipts[receipts.length - 1];
-                                                                if(confirm(`View receipt at: ${latest.fileUrl}\nVerify and mark paid?`)) {
-                                                                    await fetch(`/api/admin/invoices/${inv.id}/receipts/${latest.id}/verify`, { method: "POST" });
-                                                                    queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
-                                                                }
-                                                            } else {
-                                                                alert("No receipts found for this invoice.");
-                                                            }
-                                                        } catch(e) { console.error(e); }
-                                                    }}>
-                                                    <CheckCircle className="w-3 h-3 mr-1" /> View/Verify Receipt
-                                                </Button>
-                                            )}
                                         </td>
                                     </tr>
                                 );

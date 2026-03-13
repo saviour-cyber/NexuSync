@@ -601,87 +601,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
 
-  // Admin Bank Transfer Verification (manual, no receipt)
-  app.post("/api/admin/payments/bank/verify", requireAdmin, async (req, res) => {
-    try {
-      const { invoiceId, reference, amount } = req.body;
-      const invoice = await storage.getInvoiceById(parseInt(invoiceId));
-      if (!invoice) return res.status(404).json({ message: "Invoice not found" });
-      if (invoice.status === "paid") return res.status(400).json({ message: "Invoice already paid" });
-      await storage.updateInvoice(invoice.id, { status: "paid", paymentMethod: "bank", paymentReference: reference, paidAt: new Date() });
-      await storage.createPaymentLog({ invoiceId: invoice.id, method: "bank", status: "success", transactionId: reference, amount: amount || invoice.amount });
-      res.json({ message: "Bank payment verified and invoice marked as paid" });
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ message: "Failed to verify bank payment" });
-    }
-  });
 
-  // CLIENT: Upload bank transfer receipt
-  app.post("/api/payments/bank/receipt", requireAuth, upload.single("receipt"), async (req, res) => {
-    try {
-      if (!req.file) return res.status(400).json({ message: "No receipt file provided" });
-      const { invoiceId } = req.body;
-      if (!invoiceId) return res.status(400).json({ message: "invoiceId is required" });
-
-      const invoice = await storage.getInvoiceById(parseInt(invoiceId));
-      if (!invoice) return res.status(404).json({ message: "Invoice not found" });
-
-      // Log a pending bank payment
-      const log = await storage.createPaymentLog({
-        invoiceId: invoice.id,
-        method: "bank",
-        status: "pending",
-        transactionId: null,
-        amount: invoice.amount
-      });
-
-      // Store receipt
-      const receipt = await storage.createBankReceipt({
-        invoiceId: invoice.id,
-        paymentLogId: log.id,
-        fileUrl: `/uploads/${req.file.filename}`,
-        originalName: req.file.originalname,
-        verified: false
-      });
-
-      // Mark invoice as pending (awaiting admin verification)
-      await storage.updateInvoice(invoice.id, { status: "pending", paymentMethod: "bank" });
-
-      res.status(201).json({ receipt, log });
-    } catch (err) {
-      console.error("Receipt upload error:", err);
-      res.status(500).json({ message: "Failed to upload receipt" });
-    }
-  });
-
-  // ADMIN: Get receipts for an invoice
-  app.get("/api/admin/invoices/:id/receipts", requireAdmin, async (req, res) => {
-    try {
-      const receipts = await storage.getBankReceiptsByInvoice(parseInt(req.params.id));
-      res.json(receipts);
-    } catch (err) {
-      res.status(500).json({ message: "Failed to fetch receipts" });
-    }
-  });
-
-  // ADMIN: Verify a bank receipt and mark invoice paid
-  app.post("/api/admin/invoices/:id/receipts/:receiptId/verify", requireAdmin, async (req, res) => {
-    try {
-      const invoiceId = parseInt(req.params.id);
-      const receiptId = parseInt(req.params.receiptId);
-      const invoice = await storage.getInvoiceById(invoiceId);
-      if (!invoice) return res.status(404).json({ message: "Invoice not found" });
-
-      await storage.verifyBankReceipt(receiptId);
-      await storage.updateInvoice(invoiceId, { status: "paid", paidAt: new Date() });
-      res.json({ message: "Receipt verified and invoice marked as paid" });
-    } catch (err) {
-      res.status(500).json({ message: "Failed to verify receipt" });
-    }
-  });
-
-  // ADMIN: Get Payment Gateway Settings
   app.get("/api/admin/settings/payment", requireAdmin, async (req, res) => {
     try {
       const allSettings = await storage.getAllSettings();
@@ -691,7 +611,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         mpesa_passkey: allSettings["mpesa_passkey"] || "",
         mpesa_consumer_key: allSettings["mpesa_consumer_key"] || "",
         mpesa_consumer_secret: allSettings["mpesa_consumer_secret"] || "",
-        bank_details: allSettings["bank_details"] || "",
       });
     } catch (err) {
       res.status(500).json({ message: "Failed to fetch settings" });
@@ -701,7 +620,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ADMIN: Update Payment Gateway Settings
   app.post("/api/admin/settings/payment", requireAdmin, async (req, res) => {
     try {
-      const keys = ["mpesa_shortcode", "mpesa_passkey", "mpesa_consumer_key", "mpesa_consumer_secret", "bank_details"];
+      const keys = ["mpesa_shortcode", "mpesa_passkey", "mpesa_consumer_key", "mpesa_consumer_secret"];
       for (const key of keys) {
         if (req.body[key] !== undefined) {
            await storage.setSetting(key, req.body[key]);
@@ -710,16 +629,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.json({ message: "Payment settings updated successfully" });
     } catch (err) {
       res.status(500).json({ message: "Failed to update settings" });
-    }
-  });
-
-  // PORTAL: Get Public Bank Details
-  app.get("/api/portal/settings/bank", requireAuth, async (req, res) => {
-    try {
-      const bankDetails = await storage.getSetting("bank_details");
-      res.json({ bank_details: bankDetails || "" });
-    } catch (err) {
-      res.status(500).json({ message: "Failed to fetch bank details" });
     }
   });
 
