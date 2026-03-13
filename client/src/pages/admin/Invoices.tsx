@@ -113,7 +113,8 @@ export default function AdminInvoices() {
                         </Button>
                     </div>
                 ) : (
-                    <table className="w-full text-sm">
+                    <div className="overflow-x-auto">
+                    <table className="w-full text-sm min-w-[800px]">
                         <thead className="border-b border-border/50 bg-slate-50">
                             <tr>
                                 {["Invoice", "Client", "Project", "Amount", "Status", "Payment", "Due Date", "Action"].map(h => (
@@ -141,18 +142,18 @@ export default function AdminInvoices() {
                                             ) : "—"}
                                         </td>
                                         <td className="p-4 text-muted-foreground">{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString() : "—"}</td>
-                                        <td className="p-4 flex gap-2 items-center">
+                                        <td className="p-4">
                                             <Select value={inv.status} onValueChange={v => updateInvoice.mutate({ id: inv.id, status: v })}>
-                                                <SelectTrigger className="h-7 text-xs w-auto min-w-[120px]"><SelectValue /></SelectTrigger>
+                                                <SelectTrigger className="h-8 text-xs w-auto min-w-[150px]"><SelectValue /></SelectTrigger>
                                                 <SelectContent>{["unpaid", "pending", "paid", "overdue", "failed"].map(s => <SelectItem key={s} value={s}>{statusDisplay[s] || s}</SelectItem>)}</SelectContent>
                                             </Select>
-                                            
                                         </td>
                                     </tr>
                                 );
                             })}
                         </tbody>
                     </table>
+                    </div>
                 )}
             </div>
 
