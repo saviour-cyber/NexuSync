@@ -398,10 +398,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         progress: 0
       });
 
-      // 4. Create an initial welcome comment
-      await storage.createComment({
-        projectId: project.id,
-        userId: req.session.userId!,
+      // 4. Create an initial welcome comment in the messaging system
+      const conv = await storage.getConversationByProjectId(project.id);
+      await storage.createMessage({
+        conversationId: conv.id,
+        senderRole: "admin",
+        senderId: req.session.userId!,
         content: `Project automatically generated from Approved Quote (#${quote.id}).`
       });
 
@@ -979,11 +981,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         progress: 0,
       });
 
-      // Welcome comment
-      await storage.createComment({
-        projectId: project.id,
-        userId: 1, // System Admin (id=1)
-        content: `🎉 Your quote has been approved and this project has been created! We will be in touch shortly to discuss next steps.`,
+      // Welcome message in the new chat system
+      const conv = await storage.getConversationByProjectId(project.id);
+      await storage.createMessage({
+        conversationId: conv.id,
+        senderRole: "admin",
+        senderId: 1, // System Admin (id=1)
+        content: `🎉 Your quote has been approved and this project has been created! We will be in touch shortly to discuss next steps.`
       });
 
       res.status(201).json({ quote, project });
