@@ -11,6 +11,12 @@ import { apiRequest } from "@/lib/queryClient";
 // Payment flow steps
 type PayStep = "enter_phone" | "waiting" | "success" | "failed";
 
+// Safe amount formatter — handles null, string, or number from DB
+const formatAmount = (amount: any) => {
+    const n = typeof amount === "string" ? parseFloat(amount) : Number(amount || 0);
+    return isNaN(n) ? "0" : n.toLocaleString();
+};
+
 export default function PortalInvoices() {
     const qc = useQueryClient();
 
@@ -88,7 +94,7 @@ export default function PortalInvoices() {
         failed: "Failed",
     };
 
-    const isPayable = (status: string) => ["unpaid", "failed", "overdue"].includes(status);
+    const isPayable = (status: string) => ["unpaid", "failed", "overdue", "pending"].includes(status);
 
     if (isLoading) {
         return (
@@ -134,7 +140,7 @@ export default function PortalInvoices() {
                                 </div>
 
                                 <h3 className="text-3xl font-extrabold text-slate-900 mt-2 tracking-tight">
-                                    KES {inv.amount.toLocaleString()}
+                                    KES {formatAmount(inv.amount)}
                                 </h3>
 
                                 {inv.description && (
@@ -214,7 +220,7 @@ export default function PortalInvoices() {
                                 </div>
                                 <p className="text-white/70 text-sm font-medium uppercase tracking-wider">Pay Invoice</p>
                                 <h2 className="text-3xl font-extrabold mt-1 tracking-tight">
-                                    KES {selectedInvoice?.amount.toLocaleString()}
+                                    KES {formatAmount(selectedInvoice?.amount)}
                                 </h2>
                                 <p className="text-white/60 text-sm mt-1">#INV-{String(selectedInvoice?.id || 0).padStart(4, "0")}{selectedInvoice?.description ? ` · ${selectedInvoice.description}` : ""}</p>
                             </div>
@@ -302,7 +308,7 @@ export default function PortalInvoices() {
                             </div>
                             <h2 className="text-2xl font-bold text-slate-900">Payment Successful!</h2>
                             <p className="text-slate-500 mt-2 text-base">
-                                KES {selectedInvoice?.amount.toLocaleString()} received.<br />
+                                KES {formatAmount(selectedInvoice?.amount)} received.<br />
                                 Invoice #INV-{String(selectedInvoice?.id || 0).padStart(4, "0")} has been marked as <strong className="text-emerald-600">Paid</strong>.
                             </p>
                             <Button
