@@ -56,7 +56,7 @@ export default function AdminQuotes() {
                                 <p className="text-secondary/80 text-sm mb-2">{q.projectDetails}</p>
                                 {q.budget && <p className="text-xs text-muted-foreground">Budget: <span className="font-medium">{q.budget}</span></p>}
                                 {q.timeline && <p className="text-xs text-muted-foreground">Timeline: <span className="font-medium">{q.timeline}</span></p>}
-                                {q.estimatedPrice && <p className="text-sm font-semibold text-primary mt-1">Estimated: ${q.estimatedPrice.toLocaleString()}</p>}
+                                {q.estimatedPrice && <p className="text-sm font-semibold text-primary mt-1">Estimated: KSh {q.estimatedPrice.toLocaleString()}</p>}
                             </div>
                             <div className="shrink-0 flex flex-col gap-2 items-end">
                                 <Select value={q.status} onValueChange={v => updateQuote.mutate({ id: q.id, status: v })}>

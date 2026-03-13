@@ -23,7 +23,7 @@ function ServiceForm({ initial, onSave, onCancel }: { initial?: Partial<Service>
                     <Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} className="mt-1" />
                 </div>
                 <div>
-                    <Label>Base Price ($)</Label>
+                    <Label>Base Price (KSh)</Label>
                     <Input type="number" value={form.basePrice ?? 0} onChange={e => setForm(f => ({ ...f, basePrice: parseInt(e.target.value) || 0 }))} className="mt-1" />
                 </div>
                 <div className="md:col-span-2">
@@ -117,7 +117,7 @@ export default function AdminServices() {
                                 </div>
                                 <h3 className="font-bold text-secondary mb-2">{s.title}</h3>
                                 <p className="text-muted-foreground text-sm leading-relaxed mb-3">{s.description}</p>
-                                <p className="text-primary font-semibold text-sm">From ${(s.basePrice ?? 0).toLocaleString()}</p>
+                                <p className="text-primary font-semibold text-sm">From KSh {(s.basePrice ?? 0).toLocaleString()}</p>
                             </>
                         )}
                     </motion.div>

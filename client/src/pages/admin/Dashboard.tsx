@@ -41,7 +41,7 @@ export default function AdminDashboard() {
     const stats = [
         { icon: Users, label: "Total Clients", value: analytics?.totalClients, color: "bg-blue-500", delay: 0 },
         { icon: FolderKanban, label: "Active Projects", value: analytics?.activeProjects, color: "bg-violet-500", delay: 0.05 },
-        { icon: DollarSign, label: "Total Revenue", value: analytics?.totalRevenue ? `$${analytics.totalRevenue.toLocaleString()}` : "$0", color: "bg-emerald-500", delay: 0.1 },
+        { icon: DollarSign, label: "Total Revenue", value: analytics?.totalRevenue ? `KSh ${analytics.totalRevenue.toLocaleString()}` : "KSh 0", color: "bg-emerald-500", delay: 0.1 },
         { icon: Quote, label: "Pending Quotes", value: analytics?.pendingQuotes, color: "bg-amber-500", delay: 0.15 },
         { icon: MessageSquare, label: "Unread Messages", value: analytics?.unreadMessages, color: "bg-rose-500", delay: 0.2 },
         { icon: Activity, label: "Total Projects", value: analytics?.totalProjects, color: "bg-indigo-500", delay: 0.25 },

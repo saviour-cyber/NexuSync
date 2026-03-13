@@ -11,7 +11,7 @@ import { CheckCircle2, ArrowRight, ArrowLeft, Calculator, Send } from "lucide-re
 import { IconRenderer } from "@/components/IconRenderer";
 
 const timelines = ["Less than 1 month", "1–3 months", "3–6 months", "6+ months", "Flexible"];
-const budgets = ["Under $500", "$500–$1,500", "$1,500–$5,000", "$5,000–$15,000", "$15,000+"];
+const budgets = ["Under KSh 50,000", "KSh 50,000–KSh 150,000", "KSh 150,000–KSh 500,000", "KSh 500,000–KSh 1,500,000", "KSh 1,500,000+"];
 
 export default function QuotePage() {
     const [step, setStep] = useState(1);
@@ -54,7 +54,7 @@ export default function QuotePage() {
                             {submitted.estimatedPrice > 0 && (
                                 <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full font-semibold mb-6">
                                     <Calculator className="w-4 h-4" />
-                                    Estimated starting from ${submitted.estimatedPrice.toLocaleString()}
+                                    Estimated starting from KSh {submitted.estimatedPrice.toLocaleString()}
                                 </div>
                             )}
                             <div className="flex gap-3 justify-center">
@@ -97,7 +97,7 @@ export default function QuotePage() {
                                                             </div>
                                                             <div>
                                                                 <p className="font-semibold text-secondary text-sm">{s.title}</p>
-                                                                {s.basePrice > 0 && <p className="text-xs text-muted-foreground">From ${s.basePrice.toLocaleString()}</p>}
+                                                                {s.basePrice > 0 && <p className="text-xs text-muted-foreground">From KSh {s.basePrice.toLocaleString()}</p>}
                                                             </div>
                                                             {selected.includes(s.id) && <CheckCircle2 className="w-4 h-4 text-primary ml-auto shrink-0" />}
                                                         </button>
@@ -105,7 +105,7 @@ export default function QuotePage() {
                                                 </div>
                                                 {selected.length > 0 && (
                                                     <div className="mt-4 p-3 bg-primary/5 rounded-xl text-sm font-medium text-primary">
-                                                        Estimated total: from ${estimatedTotal.toLocaleString()} · {selected.length} service{selected.length > 1 ? "s" : ""} selected
+                                                        Estimated total: from KSh {estimatedTotal.toLocaleString()} · {selected.length} service{selected.length > 1 ? "s" : ""} selected
                                                     </div>
                                                 )}
                                             </motion.div>
@@ -156,7 +156,7 @@ export default function QuotePage() {
                                                                 <span key={s.id} className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-medium">{s.title}</span>
                                                             ))}
                                                         </div>
-                                                        {estimatedTotal > 0 && <p className="text-sm font-semibold text-primary mt-2">Starting estimate: ${estimatedTotal.toLocaleString()}</p>}
+                                                        {estimatedTotal > 0 && <p className="text-sm font-semibold text-primary mt-2">Starting estimate: KSh {estimatedTotal.toLocaleString()}</p>}
                                                     </div>
                                                     <div className="bg-slate-50 rounded-xl p-4 space-y-2 text-sm">
                                                         <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Your Details</p>

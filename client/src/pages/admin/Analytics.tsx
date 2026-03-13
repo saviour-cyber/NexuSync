@@ -36,7 +36,7 @@ export default function AdminAnalytics() {
     const stats = [
         { icon: Users, label: "Total Clients", value: analytics?.totalClients ?? 0, color: "text-blue-500 bg-blue-50" },
         { icon: FolderKanban, label: "Total Projects", value: analytics?.totalProjects ?? 0, color: "text-violet-500 bg-violet-50" },
-        { icon: DollarSign, label: "Revenue (Paid)", value: `$${(analytics?.totalRevenue ?? 0).toLocaleString()}`, color: "text-emerald-500 bg-emerald-50" },
+        { icon: DollarSign, label: "Revenue (Paid)", value: `KSh ${(analytics?.totalRevenue ?? 0).toLocaleString()}`, color: "text-emerald-500 bg-emerald-50" },
         { icon: TrendingUp, label: "Pending Quotes", value: analytics?.pendingQuotes ?? 0, color: "text-amber-500 bg-amber-50" },
     ];
 

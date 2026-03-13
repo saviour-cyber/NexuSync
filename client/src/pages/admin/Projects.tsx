@@ -230,7 +230,7 @@ export default function AdminProjects() {
                                         </SelectContent>
                                     </Select>
                                 </div>
-                                <div><Label>Budget ($)</Label><Input type="number" value={form.budget} onChange={e => setForm(f => ({ ...f, budget: parseInt(e.target.value) || 0 }))} className="mt-1" /></div>
+                                <div><Label>Budget (KSh)</Label><Input type="number" value={form.budget} onChange={e => setForm(f => ({ ...f, budget: parseInt(e.target.value) || 0 }))} className="mt-1" /></div>
                                 <div><Label>Progress (%)</Label><Input type="number" min={0} max={100} value={form.progress} onChange={e => setForm(f => ({ ...f, progress: parseInt(e.target.value) || 0 }))} className="mt-1" /></div>
                                 <div className="md:col-span-2"><Label>Description</Label><Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className="mt-1" /></div>
                             </div>

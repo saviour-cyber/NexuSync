@@ -127,7 +127,7 @@ export default function PortalQuotes() {
                                         <div className="flex items-center gap-3 shrink-0">
                                             {q.estimatedPrice != null && (
                                                 <span className="text-lg font-bold text-secondary">
-                                                    ${q.estimatedPrice.toLocaleString()}
+                                                    KSh {q.estimatedPrice.toLocaleString()}
                                                 </span>
                                             )}
                                             <span className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-semibold border ${cfg.color}`}>
@@ -153,7 +153,7 @@ export default function PortalQuotes() {
                                                         {[
                                                             { label: "Budget", value: q.budget || "Not specified" },
                                                             { label: "Timeline", value: q.timeline || "Not specified" },
-                                                            { label: "Estimate", value: q.estimatedPrice ? `$${q.estimatedPrice.toLocaleString()}` : "Pending" },
+                                                            { label: "Estimate", value: q.estimatedPrice ? `KSh ${q.estimatedPrice.toLocaleString()}` : "Pending" },
                                                             { label: "Status", value: cfg.label },
                                                         ].map(({ label, value }) => (
                                                             <div key={label} className="bg-slate-50 rounded-xl p-3">
