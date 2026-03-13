@@ -5,9 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { FileText, Plus, CheckCircle } from "lucide-react";
+import { FileText, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
 
 export default function AdminInvoices() {
     const qc = useQueryClient();
@@ -62,18 +61,6 @@ export default function AdminInvoices() {
                 body: JSON.stringify({ status, ...(status === "paid" ? { paidAt: new Date().toISOString() } : {}) }),
             }).then(r => r.json()),
         onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/admin/invoices"] }),
-    });
-
-    const verifyBankMutation = useMutation({
-        mutationFn: async (data: { invoiceId: number; reference: string; amount: number }) => {
-            const res = await apiRequest("POST", "/api/admin/payments/bank/verify", data);
-            return res.json();
-        },
-        onSuccess: () => {
-            toast({ title: "Payment Verified", description: "Invoice has been marked as paid." });
-            qc.invalidateQueries({ queryKey: ["/api/admin/invoices"] });
-        },
-        onError: () => toast({ title: "Verification Failed", variant: "destructive" }),
     });
 
     // Auto-fill client & amount when project is selected
